@@ -1,4 +1,5 @@
 print("This is a test file.")
-print("hh")
-print("test")
-print(" ")
+
+print("sly is ok")
+print("zyl is ok")
+print("ztd is ok")
