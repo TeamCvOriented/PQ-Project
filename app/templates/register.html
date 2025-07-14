@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - PQ-Project</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        .register-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .register-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .register-body {
+            padding: 30px;
+        }
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-register {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 30px;
+            color: white;
+            font-weight: 600;
+        }
+        .btn-register:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b5b95 100%);
+            color: white;
+        }
+        .role-description {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="register-card">
+                    <div class="register-header">
+                        <i class="fas fa-user-plus fa-2x mb-3"></i>
+                        <h2>加入 PQ-Project</h2>
+                        <p class="mb-0">创建您的账户</p>
+                    </div>
+                    <div class="register-body">
+                        <form id="registerForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="username" class="form-label">用户名</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                            <input type="text" class="form-control" id="username" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="nickname" class="form-label">昵称</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="fas fa-smile"></i></span>
+                                            <input type="text" class="form-control" id="nickname">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="email" class="form-label">邮箱</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                                    <input type="email" class="form-control" id="email" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">密码</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                    <input type="password" class="form-control" id="password" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="confirmPassword" class="form-label">确认密码</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                    <input type="password" class="form-control" id="confirmPassword" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="role" class="form-label">角色</label>
+                                <select class="form-select" id="role" required>
+                                    <option value="">请选择您的角色</option>
+                                    <option value="organizer">组织者</option>
+                                    <option value="speaker">演讲者</option>
+                                    <option value="listener">听众</option>
+                                </select>
+                                <div class="role-description" id="roleDescription"></div>
+                            </div>
+                            <div class="d-grid mb-3">
+                                <button type="submit" class="btn btn-register">
+                                    <i class="fas fa-user-plus me-2"></i>注册
+                                </button>
+                            </div>
+                            <div class="text-center">
+                                <p class="mb-0">已有账户？ <a href="/login" class="text-decoration-none">立即登录</a></p>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="messageToast" class="toast" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">系统消息</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 角色描述
+        const roleDescriptions = {
+            'organizer': '创建和管理演讲会话，查看整体统计数据',
+            'speaker': '上传演讲内容，控制题目发布，查看答题情况',
+            'listener': '参与答题互动，查看个人成绩和排名'
+        };
+
+        // 角色选择变化时显示描述
+        document.getElementById('role').addEventListener('change', function() {
+            const roleDescription = document.getElementById('roleDescription');
+            const selectedRole = this.value;
+            
+            if (selectedRole && roleDescriptions[selectedRole]) {
+                roleDescription.textContent = roleDescriptions[selectedRole];
+            } else {
+                roleDescription.textContent = '';
+            }
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const nickname = document.getElementById('nickname').value || username;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const role = document.getElementById('role').value;
+            
+            // 验证密码
+            if (password !== confirmPassword) {
+                showMessage('两次输入的密码不一致', 'error');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showMessage('密码长度至少6位', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username,
+                        nickname,
+                        email,
+                        password,
+                        role
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage('注册成功！正在跳转...', 'success');
+                    setTimeout(() => {
+                        // 根据用户角色跳转到相应页面
+                        const userRole = data.user.role;
+                        switch(userRole) {
+                            case 'organizer':
+                                window.location.href = '/organizer';
+                                break;
+                            case 'speaker':
+                                window.location.href = '/speaker';
+                                break;
+                            case 'listener':
+                                window.location.href = '/listener';
+                                break;
+                            default:
+                                window.location.href = '/';
+                        }
+                    }, 1500);
+                } else {
+                    showMessage(data.error || '注册失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+            }
+        });
+        
+        function showMessage(message, type) {
+            const toast = document.getElementById('messageToast');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            toastMessage.textContent = message;
+            
+            // 设置不同类型的样式
+            toast.className = 'toast';
+            if (type === 'success') {
+                toast.classList.add('bg-success', 'text-white');
+            } else {
+                toast.classList.add('bg-danger', 'text-white');
+            }
+            
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        }
+    </script>
+</body>
+</html>

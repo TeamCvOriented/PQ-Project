@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - PQ-Project</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        .login-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .login-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .login-body {
+            padding: 40px 30px;
+        }
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 30px;
+            color: white;
+            font-weight: 600;
+        }
+        .btn-login:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b5b95 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="login-card">
+                    <div class="login-header">
+                        <i class="fas fa-brain fa-3x mb-3"></i>
+                        <h2>PQ-Project</h2>
+                        <p class="mb-0">智能弹题系统</p>
+                    </div>
+                    <div class="login-body">
+                        <form id="loginForm">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">用户名</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                    <input type="text" class="form-control" id="username" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">密码</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                    <input type="password" class="form-control" id="password" required>
+                                </div>
+                            </div>
+                            <div class="d-grid mb-3">
+                                <button type="submit" class="btn btn-login">
+                                    <i class="fas fa-sign-in-alt me-2"></i>登录
+                                </button>
+                            </div>
+                            <div class="text-center">
+                                <p class="mb-0">还没有账户？ <a href="/register" class="text-decoration-none">立即注册</a></p>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="messageToast" class="toast" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">系统消息</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage('登录成功！正在跳转...', 'success');
+                    setTimeout(() => {
+                        // 根据用户角色跳转到相应页面
+                        const userRole = data.user.role;
+                        switch(userRole) {
+                            case 'organizer':
+                                window.location.href = '/organizer';
+                                break;
+                            case 'speaker':
+                                window.location.href = '/speaker';
+                                break;
+                            case 'listener':
+                                window.location.href = '/listener';
+                                break;
+                            default:
+                                window.location.href = '/';
+                        }
+                    }, 1500);
+                } else {
+                    showMessage(data.error || '登录失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+            }
+        });
+        
+        function showMessage(message, type) {
+            const toast = document.getElementById('messageToast');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            toastMessage.textContent = message;
+            
+            // 设置不同类型的样式
+            toast.className = 'toast';
+            if (type === 'success') {
+                toast.classList.add('bg-success', 'text-white');
+            } else {
+                toast.classList.add('bg-danger', 'text-white');
+            }
+            
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        }
+    </script>
+</body>
+</html>
