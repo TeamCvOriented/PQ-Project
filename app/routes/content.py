@@ -3,11 +3,40 @@ from werkzeug.utils import secure_filename
 import os
 from app import db
 from app.models import Content, Session as PQSession
-from app.file_processor import FileProcessor, detect_file_type
 from app.routes.auth import require_auth
 
 content_bp = Blueprint('content', __name__)
-file_processor = FileProcessor()
+
+# 延迟导入文件处理器以避免依赖问题
+_file_processor = None
+
+def get_file_processor():
+    """获取文件处理器实例（延迟初始化）"""
+    global _file_processor
+    if _file_processor is None:
+        try:
+            from app.file_processor import FileProcessor
+            _file_processor = FileProcessor()
+        except Exception as e:
+            print(f"警告：文件处理器初始化失败: {e}")
+            _file_processor = False
+    return _file_processor if _file_processor is not False else None
+
+def detect_file_type(filename):
+    """检测文件类型"""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in ['.txt']:
+        return 'text'
+    elif ext in ['.ppt', '.pptx']:
+        return 'ppt'
+    elif ext in ['.pdf']:
+        return 'pdf'
+    elif ext in ['.mp3', '.wav', '.m4a']:
+        return 'audio'
+    elif ext in ['.mp4', '.avi', '.mov']:
+        return 'video'
+    else:
+        return 'unknown'
 
 ALLOWED_EXTENSIONS = {
     'txt', 'md', 'pdf', 'doc', 'docx', 
@@ -63,7 +92,11 @@ def upload_content():
             file.save(file_path)
             
             # 处理文件并提取文本
-            extracted_text = file_processor.process_file(file_path, content_type)
+            file_processor = get_file_processor()
+            if file_processor:
+                extracted_text = file_processor.process_file(file_path, content_type)
+            else:
+                extracted_text = f"[文件上传成功，但文件处理器不可用 - 文件类型: {content_type}]"
             
             # 保存到数据库
             content = Content(

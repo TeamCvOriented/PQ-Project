@@ -222,7 +222,7 @@ def activate_session(session_id):
         db.session.rollback()
         return jsonify({'error': f'操作失败: {str(e)}'}), 500
 
-@session_bp.route('/<int:session_id>/speakers', methods=['GET'])
+@session_bp.route('/speakers', methods=['GET'])
 @require_auth
 def get_available_speakers():
     """获取可用的演讲者列表"""
@@ -244,6 +244,36 @@ def get_available_speakers():
     return jsonify({
         'speakers': speaker_list,
         'total': len(speaker_list)
+    })
+
+@session_bp.route('/<int:session_id>/speakers', methods=['GET'])
+@require_auth
+def get_session_speakers(session_id):
+    """获取特定会话的演讲者信息（保持向后兼容）"""
+    user_role = session.get('user_role')
+    if user_role != 'organizer':
+        return jsonify({'error': '权限不足'}), 403
+    
+    # 如果session_id为0，则返回所有演讲者（兼容旧的前端调用）
+    if session_id == 0:
+        return get_available_speakers()
+    
+    # 否则返回特定会话的演讲者信息
+    pq_session = PQSession.query.get(session_id)
+    if not pq_session:
+        return jsonify({'error': '会话不存在'}), 404
+    
+    if pq_session.organizer_id != session['user_id']:
+        return jsonify({'error': '权限不足'}), 403
+    
+    speaker = pq_session.speaker
+    return jsonify({
+        'speaker': {
+            'id': speaker.id,
+            'username': speaker.username,
+            'email': speaker.email,
+            'nickname': speaker.nickname
+        }
     })
 
 @session_bp.route('/<int:session_id>/update', methods=['PUT'])

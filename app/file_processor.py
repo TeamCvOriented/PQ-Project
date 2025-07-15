@@ -1,19 +1,56 @@
 import os
 import io
-import cv2
-import easyocr
 from PIL import Image
 from pptx import Presentation
 import PyPDF2
 from docx import Document
-import speech_recognition as sr
-from moviepy.editor import VideoFileClip
-from pydub import AudioSegment
 import tempfile
+
+# 可选导入 - 如果依赖包不可用，功能会被禁用
+try:
+    import cv2
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+    cv2 = None
+
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+except ImportError:
+    EASYOCR_AVAILABLE = False
+    easyocr = None
+
+try:
+    import speech_recognition as sr
+    SPEECH_RECOGNITION_AVAILABLE = True
+except ImportError:
+    SPEECH_RECOGNITION_AVAILABLE = False
+    sr = None
+
+try:
+    from moviepy.editor import VideoFileClip
+    MOVIEPY_AVAILABLE = True
+except ImportError:
+    MOVIEPY_AVAILABLE = False
+    VideoFileClip = None
+
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+    AudioSegment = None
 
 class FileProcessor:
     def __init__(self):
-        self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
+        self.ocr_reader = None
+        if EASYOCR_AVAILABLE:
+            try:
+                self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
+            except Exception as e:
+                print(f"警告：EasyOCR 初始化失败: {e}")
+                self.ocr_reader = None
         
     def process_file(self, file_path, content_type):
         """
@@ -65,10 +102,13 @@ class FileProcessor:
                         image_bytes = image.blob
                         pil_image = Image.open(io.BytesIO(image_bytes))
                         
-                        # 使用OCR提取图片中的文字
-                        ocr_result = self.ocr_reader.readtext(image_bytes)
-                        for detection in ocr_result:
-                            text_content.append(detection[1])
+                        # 使用OCR提取图片中的文字（如果可用）
+                        if self.ocr_reader is not None:
+                            ocr_result = self.ocr_reader.readtext(image_bytes)
+                            for detection in ocr_result:
+                                text_content.append(detection[1])
+                        else:
+                            text_content.append("[图片内容 - OCR不可用]")
                     except Exception as e:
                         print(f"OCR处理图片时出错: {str(e)}")
                         continue
@@ -105,6 +145,9 @@ class FileProcessor:
     
     def extract_text_from_audio(self, file_path):
         """从音频文件提取文本内容（语音识别）"""
+        if not SPEECH_RECOGNITION_AVAILABLE or not PYDUB_AVAILABLE:
+            return "[音频文字 - 语音识别库不可用]"
+            
         recognizer = sr.Recognizer()
         
         try:
@@ -139,6 +182,9 @@ class FileProcessor:
     
     def extract_text_from_video(self, file_path):
         """从视频文件提取文本内容（音频转文字 + OCR画面文字）"""
+        if not MOVIEPY_AVAILABLE:
+            return "[视频文字 - MoviePy库不可用]"
+            
         text_content = []
         
         try:
@@ -170,13 +216,16 @@ class FileProcessor:
                 pil_image.save(img_byte_arr, format='PNG')
                 img_byte_arr = img_byte_arr.getvalue()
                 
-                # OCR识别
+                # OCR识别（如果可用）
                 try:
-                    ocr_result = self.ocr_reader.readtext(img_byte_arr)
-                    frame_text = []
-                    for detection in ocr_result:
-                        if detection[2] > 0.5:  # 置信度阈值
-                            frame_text.append(detection[1])
+                    if self.ocr_reader is not None:
+                        ocr_result = self.ocr_reader.readtext(img_byte_arr)
+                        frame_text = []
+                        for detection in ocr_result:
+                            if detection[2] > 0.5:  # 置信度阈值
+                                frame_text.append(detection[1])
+                    else:
+                        frame_text = ["[视频帧文字 - OCR不可用]"]
                     
                     if frame_text:
                         text_content.append(f"画面文字 ({timestamp:.1f}s): {' '.join(frame_text)}")

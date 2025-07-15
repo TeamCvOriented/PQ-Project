@@ -197,11 +197,13 @@ function displaySessions(sessions) {
 // 加载演讲者列表
 async function loadSpeakers() {
     try {
-        const response = await fetch('/api/session/0/speakers');
+        const response = await fetch('/api/session/speakers');
         if (response.ok) {
             const data = await response.json();
             displaySpeakers(data.speakers);
             updateSpeakerSelect(data.speakers);
+        } else {
+            console.error('加载演讲者失败:', response.status);
         }
     } catch (error) {
         console.error('加载演讲者失败:', error);

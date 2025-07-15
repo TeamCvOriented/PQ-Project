@@ -1,12 +1,25 @@
 from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models import Quiz, QuizResponse, QuizDiscussion, Content, Session as PQSession, Feedback
-from app.quiz_generator import QuizGenerator
 from app.routes.auth import require_auth
 from datetime import datetime
 
 quiz_bp = Blueprint('quiz', __name__)
-quiz_generator = QuizGenerator()
+
+# 延迟导入测验生成器以避免依赖问题
+_quiz_generator = None
+
+def get_quiz_generator():
+    """获取测验生成器实例（延迟初始化）"""
+    global _quiz_generator
+    if _quiz_generator is None:
+        try:
+            from app.quiz_generator import QuizGenerator
+            _quiz_generator = QuizGenerator()
+        except Exception as e:
+            print(f"警告：测验生成器初始化失败: {e}")
+            _quiz_generator = False
+    return _quiz_generator if _quiz_generator is not False else None
 
 @quiz_bp.route('/generate', methods=['POST'])
 @require_auth
@@ -44,6 +57,10 @@ def generate_quiz():
             return jsonify({'error': '没有有效的文本内容'}), 400
         
         # 生成题目
+        quiz_generator = get_quiz_generator()
+        if not quiz_generator:
+            return jsonify({'error': 'AI服务暂时不可用'}), 503
+            
         quiz_data = quiz_generator.generate_quiz(all_text, num_questions)
         
         if not quiz_data:
