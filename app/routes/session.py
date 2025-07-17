@@ -30,7 +30,7 @@ def create_session():
             description=data.get('description', ''),
             organizer_id=session['user_id'],
             speaker_id=data['speaker_id'],
-            quiz_interval=data.get('quiz_interval', 10)
+            quiz_interval=10  # 默认10分钟，由演讲者控制出题时机
         )
         
         db.session.add(pq_session)

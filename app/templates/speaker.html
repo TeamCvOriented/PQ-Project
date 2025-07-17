@@ -42,6 +42,19 @@
             background-color: #e9f7ef;
             border-color: #28a745;
         }
+        #aiUploadArea {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            background-color: #f8f9fa;
+        }
+        #aiUploadArea:hover {
+            background-color: #e3f2fd;
+            border-color: #0056b3;
+        }
         .quiz-card {
             border: none;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -81,18 +94,8 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="upload">
-                            <i class="fas fa-upload me-2"></i>上传内容
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link" href="#" data-section="quizzes">
                             <i class="fas fa-question-circle me-2"></i>题目管理
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="control">
-                            <i class="fas fa-play-circle me-2"></i>演讲控制
                         </a>
                     </li>
                     <li class="nav-item">
@@ -119,50 +122,6 @@
                 </div>
                 
                 <!-- 上传内容 -->
-                <div id="upload" class="content-section">
-                    <h2 class="mb-4">上传演讲内容</h2>
-                    
-                    <!-- 选择会话 -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <label for="sessionSelect" class="form-label">选择会话</label>
-                            <select class="form-select" id="sessionSelect">
-                                <option value="">请选择会话</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- 文件上传区域 -->
-                    <div class="upload-area" id="uploadArea">
-                        <i class="fas fa-cloud-upload-alt fa-3x text-success mb-3"></i>
-                        <h4>拖拽文件到此处或点击上传</h4>
-                        <p class="text-muted">支持 PPT, PDF, Word, 音频, 视频文件</p>
-                        <input type="file" id="fileInput" accept=".ppt,.pptx,.pdf,.doc,.docx,.mp3,.wav,.m4a,.mp4,.avi,.mov,.wmv" style="display: none;">
-                        <button class="btn btn-success" onclick="document.getElementById('fileInput').click()">
-                            <i class="fas fa-folder-open me-2"></i>选择文件
-                        </button>
-                    </div>
-                    
-                    <!-- 直接输入文本 -->
-                    <div class="mt-4">
-                        <h5>或者直接输入文本内容</h5>
-                        <div class="mb-3">
-                            <textarea class="form-control" id="textContent" rows="8" placeholder="在此输入演讲文本内容..."></textarea>
-                        </div>
-                        <button class="btn btn-success" onclick="uploadText()">
-                            <i class="fas fa-save me-2"></i>保存文本
-                        </button>
-                    </div>
-                    
-                    <!-- 已上传内容列表 -->
-                    <div class="mt-5">
-                        <h5>已上传的内容</h5>
-                        <div id="uploadedContent">
-                            <!-- 已上传内容将在这里显示 -->
-                        </div>
-                    </div>
-                </div>
-                
                 <!-- 题目管理 -->
                 <div id="quizzes" class="content-section">
                     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -171,49 +130,49 @@
                             <select class="form-select d-inline-block me-3" id="quizSessionSelect" style="width: auto;">
                                 <option value="">选择会话</option>
                             </select>
-                            <button class="btn btn-success" onclick="generateQuizzes()">
-                                <i class="fas fa-magic me-2"></i>AI生成题目
-                            </button>
                         </div>
                     </div>
+                    
+                    <!-- 文件上传和AI出题 -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">上传文件并生成题目</h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- 文件上传区域 -->
+                            <div class="upload-area mb-3" id="aiUploadArea">
+                                <i class="fas fa-cloud-upload-alt fa-2x text-primary mb-2"></i>
+                                <h6>上传演讲文件</h6>
+                                <p class="text-muted small">支持 PDF 和 PPT 文件</p>
+                                <input type="file" id="aiFileInput" accept=".pdf,.ppt,.pptx" style="display: none;">
+                                <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('aiFileInput').click()">
+                                    <i class="fas fa-folder-open me-2"></i>选择文件
+                                </button>
+                            </div>
+                            
+                            <!-- 上传文件信息显示 -->
+                            <div id="uploadedFileInfo" class="mb-3" style="display: none;">
+                                <div class="alert alert-info d-flex align-items-center">
+                                    <i class="fas fa-file me-2"></i>
+                                    <span id="fileName"></span>
+                                    <button class="btn btn-sm btn-outline-danger ms-auto" onclick="clearUploadedFile()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- AI出题按钮 -->
+                            <div class="text-center">
+                                <button class="btn btn-success" id="aiGenerateBtn" onclick="generateAIQuizzes()" disabled>
+                                    <i class="fas fa-magic me-2"></i>AI出题（生成5道选择题）
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 题目列表 -->
                     <div id="quizzesList">
                         <!-- 题目列表将在这里显示 -->
-                    </div>
-                </div>
-                
-                <!-- 演讲控制 -->
-                <div id="control" class="content-section">
-                    <h2 class="mb-4">演讲控制中心</h2>
-                    
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <label for="controlSessionSelect" class="form-label">选择会话</label>
-                            <select class="form-select" id="controlSessionSelect">
-                                <option value="">请选择会话</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div id="controlPanel" style="display: none;">
-                        <!-- 当前活跃题目 -->
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h5 class="mb-0">当前题目状态</h5>
-                            </div>
-                            <div class="card-body" id="currentQuizStatus">
-                                <p class="text-muted">暂无活跃题目</p>
-                            </div>
-                        </div>
-                        
-                        <!-- 可用题目列表 -->
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="mb-0">可发布的题目</h5>
-                            </div>
-                            <div class="card-body" id="availableQuizzes">
-                                <!-- 可用题目将在这里显示 -->
-                            </div>
-                        </div>
                     </div>
                 </div>
                 

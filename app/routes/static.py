@@ -28,6 +28,11 @@ def login_page():
     """登录页面"""
     return render_template('login.html')
 
+@static_bp.route('/test-upload')
+def test_upload():
+    """测试上传页面"""
+    return render_template('test_upload.html')
+
 @static_bp.route('/register')
 def register_page():
     """注册页面"""

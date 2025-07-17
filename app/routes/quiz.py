@@ -355,3 +355,171 @@ def submit_feedback():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'提交反馈失败: {str(e)}'}), 500
+
+@quiz_bp.route('/generate-ai-quizzes', methods=['POST'])
+@require_auth
+def generate_ai_quizzes():
+    """使用AI从上传的文件直接生成5道选择题"""
+    try:
+        # 获取上传的文件
+        if 'file' not in request.files:
+            return jsonify({'error': '请选择文件'}), 400
+        
+        file = request.files['file']
+        session_id = request.form.get('session_id')
+        
+        if not file or file.filename == '':
+            return jsonify({'error': '请选择文件'}), 400
+            
+        if not session_id:
+            return jsonify({'error': '请选择会话'}), 400
+        
+        # 验证文件类型
+        allowed_extensions = ['.pdf', '.ppt', '.pptx']
+        file_ext = '.' + file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': '只支持PDF和PPT文件'}), 400
+        
+        # 验证会话存在且用户有权限
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'error': '会话不存在'}), 404
+        
+        user_id = session['user_id']
+        if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
+            return jsonify({'error': '权限不足'}), 403
+        
+        # 处理文件并生成题目
+        try:
+            from app.file_processor import FileProcessor
+            from app.quiz_generator import QuizGenerator
+            
+            file_processor = FileProcessor()
+            quiz_generator = QuizGenerator()
+            
+            # 直接从内存中的文件提取文本
+            file_content = file.read()
+            file.seek(0)  # 重置文件指针
+            
+            # 提取文本内容
+            if file_ext == '.pdf':
+                text_content = file_processor.extract_text_from_pdf_bytes(file_content)
+            else:  # PPT files
+                text_content = file_processor.extract_text_from_ppt_bytes(file_content)
+            
+            if not text_content or len(text_content.strip()) < 50:
+                return jsonify({'error': '文件内容太少，无法生成题目'}), 400
+            
+            # 使用AI生成5道选择题
+            generated_quizzes = quiz_generator.generate_quiz(text_content, num_questions=5)
+            
+            if not generated_quizzes:
+                return jsonify({'error': 'AI生成题目失败，请检查文件内容'}), 500
+            
+            # 保存题目到数据库
+            created_count = 0
+            for quiz_data in generated_quizzes:
+                try:
+                    quiz = Quiz(
+                        session_id=session_id,
+                        question=quiz_data['question'],
+                        options=quiz_data['options'],
+                        correct_answer=quiz_data['correct_answer'],
+                        created_by=user_id,
+                        created_at=datetime.utcnow()
+                    )
+                    db.session.add(quiz)
+                    created_count += 1
+                except Exception as e:
+                    print(f"保存题目失败: {e}")
+                    continue
+            
+            if created_count == 0:
+                return jsonify({'error': '保存题目失败'}), 500
+            
+            db.session.commit()
+            
+            return jsonify({
+                'message': f'成功生成{created_count}道题目', 
+                'count': created_count
+            })
+            
+        except ImportError as e:
+            return jsonify({'error': '文件处理功能未正确配置'}), 500
+        except Exception as e:
+            print(f"AI生成题目错误: {e}")
+            return jsonify({'error': f'生成题目失败: {str(e)}'}), 500
+            
+    except Exception as e:
+        db.session.rollback()
+        print(f"AI题目生成路由错误: {e}")
+        return jsonify({'error': '系统错误，请重试'}), 500
+
+@quiz_bp.route('/test-upload', methods=['POST'])
+def test_file_upload():
+    """测试文件上传功能"""
+    try:
+        # 检查是否有文件
+        if 'file' not in request.files:
+            return jsonify({'error': '请选择文件', 'step': 'file_check'}), 400
+        
+        file = request.files['file']
+        session_id = request.form.get('session_id', 'test')
+        
+        if not file or file.filename == '':
+            return jsonify({'error': '请选择文件', 'step': 'file_empty'}), 400
+        
+        # 文件信息
+        file_info = {
+            'filename': file.filename,
+            'content_type': file.content_type,
+            'size': len(file.read())
+        }
+        file.seek(0)  # 重置文件指针
+        
+        # 验证文件类型
+        allowed_extensions = ['.pdf', '.ppt', '.pptx']
+        file_ext = '.' + file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': '只支持PDF和PPT文件', 'step': 'file_type', 'info': file_info}), 400
+        
+        # 尝试处理文件
+        try:
+            from app.file_processor import FileProcessor
+            file_processor = FileProcessor()
+            
+            # 读取文件内容
+            file_content = file.read()
+            
+            # 提取文本
+            if file_ext == '.pdf':
+                text_content = file_processor.extract_text_from_pdf_bytes(file_content)
+            else:  # PPT files
+                text_content = file_processor.extract_text_from_ppt_bytes(file_content)
+            
+            text_info = {
+                'length': len(text_content) if text_content else 0,
+                'preview': text_content[:200] if text_content else 'No text extracted'
+            }
+            
+            return jsonify({
+                'message': '文件处理成功',
+                'file_info': file_info,
+                'text_info': text_info,
+                'step': 'complete'
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'error': f'文件处理失败: {str(e)}',
+                'step': 'file_processing',
+                'info': file_info
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'error': f'测试失败: {str(e)}',
+            'step': 'general_error'
+        }), 500

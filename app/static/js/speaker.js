@@ -22,25 +22,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // 文件上传相关事件
-    setupFileUpload();
+    setupAIFileUpload();
     
     // 会话选择事件
-    document.getElementById('sessionSelect').addEventListener('change', function() {
-        currentSessionId = this.value;
-        if (currentSessionId) {
-            loadSessionContent(currentSessionId);
-        }
-    });
-    
     document.getElementById('quizSessionSelect').addEventListener('change', function() {
         if (this.value) {
             loadQuizzes(this.value);
-        }
-    });
-    
-    document.getElementById('controlSessionSelect').addEventListener('change', function() {
-        if (this.value) {
-            setupControlPanel(this.value);
         }
     });
 });
@@ -164,7 +151,7 @@ function displaySessions(sessions) {
 
 // 更新会话选择下拉框
 function updateSessionSelects(sessions) {
-    const selects = ['sessionSelect', 'quizSessionSelect', 'controlSessionSelect', 'statsSessionSelect'];
+    const selects = ['quizSessionSelect', 'statsSessionSelect'];
     
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
@@ -185,7 +172,7 @@ function selectSession(sessionId) {
     currentSessionId = sessionId;
     
     // 更新所有下拉框的选中状态
-    const selects = ['sessionSelect', 'quizSessionSelect', 'controlSessionSelect', 'statsSessionSelect'];
+    const selects = ['quizSessionSelect', 'statsSessionSelect'];
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
         if (select) {
@@ -420,4 +407,142 @@ function showMessage(message, type) {
     
     const bsToast = new bootstrap.Toast(toast);
     bsToast.show();
+}
+
+// AI文件上传功能
+let uploadedFile = null;
+
+function setupAIFileUpload() {
+    const fileInput = document.getElementById('aiFileInput');
+    const uploadArea = document.getElementById('aiUploadArea');
+    const fileInfo = document.getElementById('uploadedFileInfo');
+    const fileName = document.getElementById('fileName');
+    const generateBtn = document.getElementById('aiGenerateBtn');
+    
+    // 文件选择事件
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            handleAIFileSelect(file);
+        }
+    });
+    
+    // 拖拽上传
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.style.backgroundColor = '#e3f2fd';
+    });
+    
+    uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        uploadArea.style.backgroundColor = '#f8f9fa';
+    });
+    
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.style.backgroundColor = '#f8f9fa';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.type === 'application/pdf' || 
+                file.name.endsWith('.ppt') || 
+                file.name.endsWith('.pptx')) {
+                handleAIFileSelect(file);
+            } else {
+                showMessage('请选择PDF或PPT文件', 'error');
+            }
+        }
+    });
+    
+    // 点击上传区域触发文件选择
+    uploadArea.addEventListener('click', function() {
+        fileInput.click();
+    });
+}
+
+function handleAIFileSelect(file) {
+    // 验证文件类型
+    const allowedTypes = ['application/pdf', 'application/vnd.ms-powerpoint', 
+                         'application/vnd.openxmlformats-officedocument.presentationml.presentation'];
+    const allowedExtensions = ['.pdf', '.ppt', '.pptx'];
+    
+    const isValidType = allowedTypes.includes(file.type) || 
+                       allowedExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+    
+    if (!isValidType) {
+        showMessage('请选择PDF或PPT文件', 'error');
+        return;
+    }
+    
+    // 验证文件大小（限制为50MB）
+    if (file.size > 50 * 1024 * 1024) {
+        showMessage('文件大小不能超过50MB', 'error');
+        return;
+    }
+    
+    uploadedFile = file;
+    
+    // 显示文件信息
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('uploadedFileInfo').style.display = 'block';
+    document.getElementById('aiGenerateBtn').disabled = false;
+    
+    showMessage('文件上传成功，现在可以生成题目了', 'success');
+}
+
+function clearUploadedFile() {
+    uploadedFile = null;
+    document.getElementById('aiFileInput').value = '';
+    document.getElementById('uploadedFileInfo').style.display = 'none';
+    document.getElementById('aiGenerateBtn').disabled = true;
+}
+
+async function generateAIQuizzes() {
+    if (!uploadedFile) {
+        showMessage('请先上传文件', 'error');
+        return;
+    }
+    
+    const sessionId = document.getElementById('quizSessionSelect').value;
+    if (!sessionId) {
+        showMessage('请先选择会话', 'error');
+        return;
+    }
+    
+    const generateBtn = document.getElementById('aiGenerateBtn');
+    const originalText = generateBtn.innerHTML;
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>AI正在生成题目...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', uploadedFile);
+        formData.append('session_id', sessionId);
+        
+        const response = await fetch('/api/quiz/generate-ai-quizzes', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            showMessage(`成功生成${result.count}道题目`, 'success');
+            
+            // 清除上传的文件
+            clearUploadedFile();
+            
+            // 重新加载题目列表
+            loadQuizzes(sessionId);
+        } else {
+            const error = await response.json();
+            showMessage(error.message || 'AI生成题目失败', 'error');
+        }
+    } catch (error) {
+        console.error('生成题目错误:', error);
+        showMessage('网络错误，请重试', 'error');
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = originalText;
+    }
 }

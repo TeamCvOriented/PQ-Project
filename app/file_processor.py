@@ -254,6 +254,42 @@ class FileProcessor:
         except Exception as e:
             print(f"处理Word文档时出错: {str(e)}")
             return ""
+    
+    def extract_text_from_pdf_bytes(self, pdf_bytes):
+        """从PDF字节流提取文本内容"""
+        text_content = []
+        
+        try:
+            pdf_file = io.BytesIO(pdf_bytes)
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                text = page.extract_text()
+                if text.strip():
+                    text_content.append(text)
+        except Exception as e:
+            print(f"从PDF字节流读取文本时出错: {str(e)}")
+        
+        return '\n'.join(text_content)
+
+    def extract_text_from_ppt_bytes(self, ppt_bytes):
+        """从PowerPoint字节流提取文本内容"""
+        text_content = []
+        
+        try:
+            ppt_file = io.BytesIO(ppt_bytes)
+            presentation = Presentation(ppt_file)
+            
+            for slide in presentation.slides:
+                # 提取文本框内容
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text.strip():
+                        text_content.append(shape.text)
+        except Exception as e:
+            print(f"从PPT字节流读取文本时出错: {str(e)}")
+        
+        return '\n'.join(text_content)
 
 # 文件类型检测函数
 def detect_file_type(filename):

@@ -261,7 +261,6 @@ async function createSession() {
     const title = document.getElementById('sessionTitle').value;
     const description = document.getElementById('sessionDescription').value;
     const speakerId = document.getElementById('speakerId').value;
-    const quizInterval = document.getElementById('quizInterval').value;
     
     if (!title || !speakerId) {
         showMessage('请填写所有必填字段', 'error');
@@ -277,8 +276,7 @@ async function createSession() {
             body: JSON.stringify({
                 title,
                 description,
-                speaker_id: parseInt(speakerId),
-                quiz_interval: parseInt(quizInterval)
+                speaker_id: parseInt(speakerId)
             })
         });
         

@@ -1,22 +1,131 @@
-import google.generativeai as genai
 import os
 import json
+import logging
+import asyncio
+import time
 import re
-from typing import List, Dict
+from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+# 加载环境变量
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+class MockQuizGenerator:
+    """
+    模拟题目生成器，用于测试和备用
+    """
+    def __init__(self):
+        pass
+    
+    def generate_quiz(self, text_content: str, num_questions: int = 5) -> List[Dict]:
+        """
+        生成模拟题目
+        """
+        try:
+            # 基于文本内容生成一些简单的模拟题目
+            mock_questions = []
+            
+            for i in range(min(num_questions, 3)):  # 最多生成3题
+                question = {
+                    "question": f"基于提供内容的第{i+1}道题目",
+                    "options": [
+                        f"选项A：相关概念{i+1}",
+                        f"选项B：相关概念{i+2}",
+                        f"选项C：相关概念{i+3}",
+                        f"选项D：相关概念{i+4}"
+                    ],
+                    "correct_answer": i % 4,  # 循环选择正确答案
+                    "explanation": f"这是第{i+1}道题的解释说明"
+                }
+                mock_questions.append(question)
+            
+            return mock_questions
+            
+        except Exception as e:
+            logger.error(f"模拟题目生成失败: {e}")
+            return []
 
 class QuizGenerator:
     def __init__(self):
-        # 配置Gemini API
-        api_key = os.getenv('GEMINI_API_KEY')
-        if not api_key:
-            raise ValueError("请在.env文件中设置GEMINI_API_KEY")
+        # 加载环境变量
+        load_dotenv()
         
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        # 配置新版 Gemini API
+        self.api_key = os.getenv('GEMINI_API_KEY')
+        self.use_mock = False
+        self.client = None
+        self.mock_generator = MockQuizGenerator()
+        
+        if not self.api_key:
+            print("警告: 未找到GEMINI_API_KEY，将使用模拟生成器")
+            self.use_mock = True
+        else:
+            try:
+                # 使用新的 google-genai 客户端
+                self.client = genai.Client(api_key=self.api_key)
+                print("✅ 新版 Gemini API 配置成功")
+            except Exception as e:
+                print(f"警告: 新版 Gemini API 配置失败，将使用模拟生成器: {e}")
+                self.use_mock = True
+                self.client = None
+    
+    
+    async def _generate_with_gemini_async(self, content_text: str, num_questions: int = 1) -> List[Dict]:
+        """
+        使用新版 Gemini API 异步生成题目（支持20秒超时）
+        """
+        if not self.client:
+            raise Exception("Gemini API 客户端未初始化")
+        
+        # 构建提示词
+        prompt = f"""
+基于以下内容生成 {num_questions} 道选择题。每道题有4个选项，请标明正确答案序号（0-3）和解释。
+
+内容：
+{content_text[:2000]}  # 限制内容长度避免超时
+
+请严格按照以下JSON格式返回：
+{{
+    "questions": [
+        {{
+            "question": "题目内容",
+            "options": ["选项A", "选项B", "选项C", "选项D"],
+            "correct_answer": 0,
+            "explanation": "答案解释"
+        }}
+    ]
+}}
+
+要求：
+1. 题目要基于提供的内容
+2. 选项要合理且有区分度
+3. 正确答案序号从0开始
+4. 解释要简洁明了
+"""
+        
+        try:
+            # 使用新版 API 生成内容，关闭思考功能以提高速度
+            response = self.client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_budget=0)  # 关闭思考功能
+                ),
+            )
+            
+            return self._parse_response(response.text)
+            
+        except Exception as e:
+            logger.error(f"Gemini API调用失败: {e}")
+            raise e
     
     def generate_quiz(self, content_text: str, num_questions: int = 1) -> List[Dict]:
         """
-        根据内容文本生成选择题
+        根据内容文本生成选择题（支持20秒超时）
         
         Args:
             content_text: 源内容文本
@@ -25,210 +134,108 @@ class QuizGenerator:
         Returns:
             包含题目信息的字典列表
         """
-        # 构建提示词
-        prompt = self._build_prompt(content_text, num_questions)
+        # 如果使用模拟生成器
+        if self.use_mock or not self.client:
+            print("使用模拟题目生成器...")
+            return self.mock_generator.generate_quiz(content_text, num_questions)
         
+        # 尝试使用真实的 Gemini API (20秒超时)
         try:
-            # 调用Gemini API
-            response = self.model.generate_content(prompt)
+            print("🔄 正在使用新版 Gemini API 生成题目...")
+            start_time = time.time()
             
-            # 解析响应
-            quiz_data = self._parse_response(response.text)
+            # 使用异步方式处理超时
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
-            # 验证和优化题目质量
-            validated_quizzes = []
-            for quiz in quiz_data:
-                if self._validate_quiz(quiz):
-                    optimized_quiz = self._optimize_quiz(quiz, content_text)
-                    validated_quizzes.append(optimized_quiz)
-            
-            return validated_quizzes[:num_questions]
-            
+            try:
+                # 设置20秒超时
+                result = loop.run_until_complete(
+                    asyncio.wait_for(
+                        self._generate_with_gemini_async(content_text, num_questions),
+                        timeout=20.0
+                    )
+                )
+                
+                elapsed_time = time.time() - start_time
+                print(f"✅ Gemini API 调用成功，耗时: {elapsed_time:.2f}秒")
+                return result
+                
+            except asyncio.TimeoutError:
+                elapsed_time = time.time() - start_time
+                print(f"⏰ Gemini API 调用超时（{elapsed_time:.1f}秒），切换到模拟生成器...")
+                return self.mock_generator.generate_quiz(content_text, num_questions)
+                
+            finally:
+                loop.close()
+                
         except Exception as e:
-            print(f"生成题目时出错: {str(e)}")
-            return []
-    
-    def _build_prompt(self, content_text: str, num_questions: int) -> str:
-        """构建发送给AI的提示词"""
-        prompt = f"""
-请根据以下内容生成{num_questions}道高质量的选择题。题目要求：
+            print(f"❌ Gemini API调用失败: {e}")
+            print("🔄 切换到模拟生成器...")
+            return self.mock_generator.generate_quiz(content_text, num_questions)
 
-1. 题目应该有适当的难度，既不过于简单也不过于困难
-2. 四个选项中只有一个正确答案
-3. 错误选项要有一定的迷惑性，但不能是明显错误的
-4. 题目要紧扣内容核心，测试理解而非记忆
-5. 每道题的回答时间应控制在10-30秒内
-6. 提供题目解释说明
-
-内容文本：
-{content_text}
-
-请按照以下JSON格式返回：
-```json
-[
-    {{
-        "question": "题目内容",
-        "option_a": "选项A",
-        "option_b": "选项B", 
-        "option_c": "选项C",
-        "option_d": "选项D",
-        "correct_answer": "A",
-        "explanation": "答案解释",
-        "difficulty": "medium",
-        "time_estimate": 20
-    }}
-]
-```
-
-请确保返回的是有效的JSON格式。
-"""
-        return prompt
     
     def _parse_response(self, response_text: str) -> List[Dict]:
-        """解析AI返回的响应"""
+        """解析新版 API 返回的响应"""
         try:
-            # 提取JSON部分
-            json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+            # 清理响应文本
+            cleaned_text = response_text.strip()
+            
+            # 尝试提取JSON部分
+            json_match = re.search(r'```json\s*(.*?)\s*```', cleaned_text, re.DOTALL)
             if json_match:
-                json_str = json_match.group(1)
+                json_str = json_match.group(1).strip()
             else:
-                # 如果没有找到代码块，尝试直接解析
-                json_str = response_text
+                # 寻找花括号包围的JSON
+                brace_match = re.search(r'\{.*\}', cleaned_text, re.DOTALL)
+                if brace_match:
+                    json_str = brace_match.group(0)
+                else:
+                    json_str = cleaned_text
             
             # 解析JSON
-            quiz_data = json.loads(json_str)
+            data = json.loads(json_str)
             
-            # 确保返回的是列表
-            if isinstance(quiz_data, dict):
-                quiz_data = [quiz_data]
+            # 确保返回的是新格式的题目列表
+            if isinstance(data, dict) and 'questions' in data:
+                questions = data['questions']
+            elif isinstance(data, list):
+                questions = data
+            else:
+                raise ValueError("响应格式不正确")
             
-            return quiz_data
+            # 转换为统一格式
+            result = []
+            for q in questions:
+                if isinstance(q, dict) and 'question' in q:
+                    formatted_q = {
+                        'question': q.get('question', ''),
+                        'options': q.get('options', []),
+                        'correct_answer': q.get('correct_answer', 0),
+                        'explanation': q.get('explanation', ''),
+                        'difficulty': q.get('difficulty', 'medium'),
+                        'time_estimate': q.get('time_estimate', 20)
+                    }
+                    
+                    # 确保选项是列表格式
+                    if not isinstance(formatted_q['options'], list):
+                        formatted_q['options'] = [
+                            q.get('option_a', '选项A'),
+                            q.get('option_b', '选项B'),
+                            q.get('option_c', '选项C'),
+                            q.get('option_d', '选项D')
+                        ]
+                    
+                    result.append(formatted_q)
             
-        except json.JSONDecodeError as e:
-            print(f"JSON解析错误: {str(e)}")
-            print(f"原始响应: {response_text}")
-            return []
-    
-    def _validate_quiz(self, quiz: Dict) -> bool:
-        """验证题目的基本格式和质量"""
-        required_fields = ['question', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
-        
-        # 检查必需字段
-        for field in required_fields:
-            if field not in quiz or not quiz[field]:
-                return False
-        
-        # 检查正确答案格式
-        if quiz['correct_answer'] not in ['A', 'B', 'C', 'D']:
-            return False
-        
-        # 检查题目长度
-        if len(quiz['question']) < 10 or len(quiz['question']) > 500:
-            return False
-        
-        # 检查选项长度
-        for option in ['option_a', 'option_b', 'option_c', 'option_d']:
-            if len(quiz[option]) < 1 or len(quiz[option]) > 200:
-                return False
-        
-        return True
-    
-    def _optimize_quiz(self, quiz: Dict, content_text: str) -> Dict:
-        """优化题目质量"""
-        try:
-            # 使用AI进行题目质量检查和优化
-            optimization_prompt = f"""
-请评估并优化以下选择题的质量：
-
-题目：{quiz['question']}
-A. {quiz['option_a']}
-B. {quiz['option_b']} 
-C. {quiz['option_c']}
-D. {quiz['option_d']}
-正确答案：{quiz['correct_answer']}
-
-原始内容：{content_text[:1000]}...
-
-请检查：
-1. 题目是否过于简单或过于困难？
-2. 错误选项是否有足够的迷惑性？
-3. 题目是否真正测试了对内容的理解？
-
-如果需要优化，请返回优化后的题目，格式与原题相同。如果不需要优化，请返回"NO_CHANGE"。
-"""
-            
-            response = self.model.generate_content(optimization_prompt)
-            
-            if "NO_CHANGE" not in response.text:
-                optimized_data = self._parse_response(response.text)
-                if optimized_data and self._validate_quiz(optimized_data[0]):
-                    return optimized_data[0]
+            if not result:
+                raise ValueError("未能解析出有效题目")
+                
+            print(f"✅ 成功解析出 {len(result)} 道题目")
+            return result
             
         except Exception as e:
-            print(f"优化题目时出错: {str(e)}")
-        
-        return quiz
-    
-    def check_quiz_quality(self, quiz: Dict, content_text: str) -> Dict:
-        """检查题目质量并返回评估结果"""
-        try:
-            quality_prompt = f"""
-请评估以下选择题的质量（1-10分）：
+            print(f"❌ 解析AI响应失败: {e}")
+            print(f"原始响应: {response_text[:200]}...")
+            # 返回空列表，让调用者处理
 
-题目：{quiz['question']}
-A. {quiz['option_a']}
-B. {quiz['option_b']}
-C. {quiz['option_c']} 
-D. {quiz['option_d']}
-正确答案：{quiz['correct_answer']}
-
-原始内容：{content_text[:1000]}...
-
-请从以下维度评分：
-1. 相关性：题目是否与内容相关 (1-10)
-2. 难度适中：题目难度是否合适 (1-10)
-3. 迷惑性：错误选项是否有迷惑性 (1-10)
-4. 清晰度：题目表述是否清晰 (1-10)
-
-请返回JSON格式：
-{{
-    "relevance": 8,
-    "difficulty": 7,
-    "distraction": 6,
-    "clarity": 9,
-    "overall": 7.5,
-    "suggestions": "改进建议"
-}}
-"""
-            
-            response = self.model.generate_content(quality_prompt)
-            quality_data = self._parse_response(response.text)
-            
-            return quality_data[0] if quality_data else {}
-            
-        except Exception as e:
-            print(f"检查题目质量时出错: {str(e)}")
-            return {}
-    
-    def generate_diverse_quizzes(self, content_text: str, num_questions: int = 3) -> List[Dict]:
-        """
-        生成多样化的题目，确保不同学生收到不同的问题
-        """
-        all_quizzes = []
-        
-        # 分批生成题目以增加多样性
-        for i in range(num_questions):
-            variation_prompt = f"""
-基于以下内容，请生成一道与之前生成的题目不同的选择题。
-要求题目角度新颖，关注内容的不同方面。
-
-内容：{content_text}
-
-第{i+1}次生成，请确保题目的独特性。
-"""
-            
-            quiz = self.generate_quiz(content_text, 1)
-            if quiz:
-                all_quizzes.extend(quiz)
-        
-        return all_quizzes
