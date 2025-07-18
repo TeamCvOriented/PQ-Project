@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+
 // 检查用户认证状态
 async function checkAuthentication() {
     try {

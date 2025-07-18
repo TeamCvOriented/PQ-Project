@@ -25,6 +25,7 @@ class MockQuizGenerator:
         """
         生成模拟题目
         """
+        
         try:
             # 基于文本内容生成一些简单的模拟题目
             mock_questions = []

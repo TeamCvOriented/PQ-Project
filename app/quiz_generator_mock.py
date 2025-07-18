@@ -80,6 +80,7 @@ class MockQuizGenerator:
         """根据模板和关键词生成题目"""
         quiz = template.copy()
         
+        
         # 替换模板中的占位符
         topic = keywords["topics"][index % len(keywords["topics"])]
         concept = keywords["concepts"][index % len(keywords["concepts"])]

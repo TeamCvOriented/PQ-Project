@@ -374,6 +374,7 @@ def generate_ai_quizzes():
         if not session_id:
             return jsonify({'error': '请选择会话'}), 400
         
+        
         # 验证文件类型
         allowed_extensions = ['.pdf', '.ppt', '.pptx']
         file_ext = '.' + file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
