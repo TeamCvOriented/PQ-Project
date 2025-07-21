@@ -5,6 +5,8 @@ let currentQuizId = null;
 let quizTimer = null;
 let timeLeft = 0;
 let currentSessionId = null; // 添加当前会话ID跟踪
+let quizSequence = []; // 存储题目序列
+let currentQuizIndex = -1; // 当前题目在序列中的索引
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -194,43 +196,238 @@ async function checkForNewQuiz() {
     
     try {
         console.log(`检查会话${currentSessionId}的题目...`);
-        const quizResponse = await fetch(`/api/quiz/current/${currentSessionId}`);
         
-        console.log(`检查会话${currentSessionId}的题目，响应状态:`, quizResponse.status);
+        // 获取题目序列
+        await loadQuizSequence();
         
-        if (quizResponse.ok) {
-            const quizData = await quizResponse.json();
-            console.log('题目数据:', quizData);
-            
-            if (quizData.success && quizData.quiz) {
-                console.log('找到活跃题目:', quizData.quiz.question);
-                
-                // 检查是否是新题目
-                if (currentQuizId !== quizData.quiz.id) {
-                    console.log('这是一个新题目，显示题目');
-                    displayQuiz(quizData.quiz, currentSessionId);
-                } else {
-                    console.log('这是当前题目，无需更新');
-                }
-                return;
-            } else {
-                console.log('没有活跃题目:', quizData.message);
-            }
-        } else {
-            console.log('获取题目失败:', quizResponse.status, await quizResponse.text());
+        if (quizSequence.length === 0) {
+            console.log('没有题目序列');
+            showWaitingState();
+            return;
         }
         
-        // 没有活跃题目，显示等待状态
-        if (currentQuizId !== null) {
-            console.log('没有活跃题目，显示等待状态');
-            showWaitingState();
-            currentQuizId = null;
+        // 找到下一个未回答的题目
+        const nextQuiz = findNextUnAnsweredQuiz();
+        
+        if (nextQuiz) {
+            console.log('找到下一个未回答题目:', nextQuiz.question);
+            
+            // 检查是否是新题目
+            if (currentQuizId !== nextQuiz.id) {
+                console.log('显示新题目');
+                displayQuiz(nextQuiz, currentSessionId);
+            } else {
+                console.log('这是当前题目，无需更新');
+            }
+        } else {
+            console.log('所有题目已完成');
+            showAllQuizzesCompleted();
         }
         
     } catch (error) {
         console.error('检查题目失败:', error);
         showWaitingState();
     }
+}
+
+// 找到下一个未回答的题目
+function findNextUnAnsweredQuiz() {
+    for (let quiz of quizSequence) {
+        if (!quiz.has_answered) {
+            return quiz;
+        }
+    }
+    return null; // 所有题目都已回答
+}
+
+// 加载题目序列
+async function loadQuizSequence() {
+    try {
+        const response = await fetch(`/api/quiz/session-sequence/${currentSessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                quizSequence = data.quiz_sequence;
+                console.log(`加载了${quizSequence.length}道题目序列`);
+            }
+        }
+    } catch (error) {
+        console.error('加载题目序列失败:', error);
+    }
+}
+
+// 请求激活下一题
+async function requestNextQuiz() {
+    try {
+        const response = await fetch(`/api/quiz/auto-activate-next/${currentSessionId}`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('激活下一题响应:', data);
+            
+            if (data.success) {
+                if (data.is_finished) {
+                    console.log('所有题目已完成');
+                    showAllQuizzesCompleted();
+                } else {
+                    console.log(`已请求激活第${data.quiz_index + 1}题`);
+                    // 显示正在准备下一题的状态
+                    showPreparingNextQuiz(data.quiz_index + 1, data.total_quizzes);
+                    // 短暂等待后重新检查题目
+                    setTimeout(() => {
+                        checkForNewQuiz();
+                    }, 2000);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('请求下一题失败:', error);
+    }
+}
+
+// 显示正在准备下一题的状态
+function showPreparingNextQuiz(nextQuizNumber, totalQuizzes) {
+    const currentQuizDiv = document.getElementById('currentQuiz');
+    const waitingDiv = document.getElementById('waitingState');
+    
+    if (currentQuizDiv && waitingDiv) {
+        currentQuizDiv.style.display = 'none';
+        waitingDiv.style.display = 'block';
+        
+        waitingDiv.innerHTML = `
+            <div class="text-center">
+                <i class="fas fa-hourglass-half fa-3x text-info mb-3"></i>
+                <h5>正在准备下一题...</h5>
+                <p class="text-muted">即将显示第 ${nextQuizNumber}/${totalQuizzes} 题</p>
+                <div class="progress mb-3" style="max-width: 300px; margin: 0 auto;">
+                    <div class="progress-bar bg-info" role="progressbar" 
+                         style="width: ${((nextQuizNumber - 1) / totalQuizzes * 100)}%">
+                    </div>
+                </div>
+                <div class="spinner-border text-info" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// 显示所有题目完成状态
+function showAllQuizzesCompleted() {
+    const currentQuizDiv = document.getElementById('currentQuiz');
+    const waitingDiv = document.getElementById('waitingState');
+    
+    if (currentQuizDiv && waitingDiv) {
+        currentQuizDiv.style.display = 'none';
+        waitingDiv.style.display = 'block';
+        
+        const totalQuizzes = quizSequence.length;
+        
+        waitingDiv.innerHTML = `
+            <div class="text-center">
+                <i class="fas fa-trophy fa-3x text-success mb-3"></i>
+                <h5>🎉 恭喜！您已完成所有题目</h5>
+                <p class="text-success font-weight-bold">共完成 ${totalQuizzes} 道题目</p>
+                <p class="text-muted">感谢您的参与，请等待演讲继续...</p>
+                <div class="mt-3">
+                    <button class="btn btn-outline-primary" onclick="loadUserStats()">
+                        <i class="fas fa-chart-bar me-2"></i>查看我的成绩
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// 替换题目内容（平滑切换，不关闭弹窗）
+function replaceQuizContent(quiz) {
+    console.log('=== 平滑切换到新题目 ===');
+    console.log('新题目数据:', quiz);
+    
+    const quizDisplay = document.getElementById('fixedQuizDisplay');
+    if (!quizDisplay) {
+        // 如果没有现有的题目显示，则创建新的
+        displayQuiz(quiz, currentSessionId);
+        return;
+    }
+    
+    // 找到题目容器
+    const quizContainer = quizDisplay.querySelector('div[style*="background: white"]');
+    if (!quizContainer) {
+        console.error('找不到题目容器');
+        return;
+    }
+    
+    // 停止当前计时器
+    if (fixedQuizTimer) {
+        clearInterval(fixedQuizTimer);
+        fixedQuizTimer = null;
+    }
+    
+    // 设置新题目内容
+    currentQuizId = quiz.id;
+    timeLeft = quiz.time_limit || 60;
+    selectedFixedAnswer = null;
+    
+    // 查找当前题目在序列中的位置
+    let quizNumber = '?';
+    let totalQuizzes = quizSequence.length;
+    
+    const currentIndex = quizSequence.findIndex(q => q.id === quiz.id);
+    if (currentIndex !== -1) {
+        quizNumber = currentIndex + 1;
+        currentQuizIndex = currentIndex;
+    }
+    
+    // 更新题目内容
+    quizContainer.innerHTML = `
+        <div style="text-align: center; margin-bottom: 20px;">
+            <div style="background: #dc3545; color: white; border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: bold; margin: 0 auto 15px;">
+                <span id="fixedTimer">${timeLeft}</span>
+            </div>
+            <h4 style="color: #333; margin-bottom: 10px;">题目 ${quizNumber}/${totalQuizzes}</h4>
+            <p style="color: #666;">剩余时间: <span id="timeDisplay">${timeLeft}</span> 秒</p>
+        </div>
+        
+        <div style="background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+            <h5 style="color: #333; margin-bottom: 0;">${quiz.question}</h5>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <div onclick="selectFixedOption('A', this)" style="background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center;">
+                <span style="background: #007bff; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-weight: bold;">A</span>
+                <span>${quiz.option_a}</span>
+            </div>
+            <div onclick="selectFixedOption('B', this)" style="background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center;">
+                <span style="background: #28a745; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-weight: bold;">B</span>
+                <span>${quiz.option_b}</span>
+            </div>
+            <div onclick="selectFixedOption('C', this)" style="background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center;">
+                <span style="background: #ffc107; color: #333; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-weight: bold;">C</span>
+                <span>${quiz.option_c}</span>
+            </div>
+            <div onclick="selectFixedOption('D', this)" style="background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center;">
+                <span style="background: #17a2b8; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-weight: bold;">D</span>
+                <span>${quiz.option_d}</span>
+            </div>
+        </div>
+        
+        <div style="text-align: center;">
+            <button id="fixedSubmitBtn" onclick="submitFixedAnswer()" disabled style="background: #6c757d; color: white; border: none; padding: 12px 30px; border-radius: 25px; font-size: 1rem; font-weight: bold; cursor: not-allowed; margin-right: 10px;">
+                提交答案
+            </button>
+            <button onclick="closeFixedQuiz()" style="background: #dc3545; color: white; border: none; padding: 12px 30px; border-radius: 25px; font-size: 1rem;">
+                关闭
+            </button>
+        </div>
+    `;
+    
+    console.log('题目内容已更新，开始新计时');
+    
+    // 开始新的计时
+    startFixedTimer();
 }
 
 // 显示题目 - 修复版本，使用固定覆盖层显示
@@ -280,12 +477,22 @@ function displayQuiz(quiz, sessionId) {
     currentQuizId = quiz.id;
     timeLeft = quiz.time_limit || 60;
     
+    // 查找当前题目在序列中的位置
+    let quizNumber = '?';
+    let totalQuizzes = quizSequence.length;
+    
+    const currentIndex = quizSequence.findIndex(q => q.id === quiz.id);
+    if (currentIndex !== -1) {
+        quizNumber = currentIndex + 1;
+        currentQuizIndex = currentIndex;
+    }
+    
     quizContainer.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
             <div style="background: #dc3545; color: white; border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: bold; margin: 0 auto 15px;">
                 <span id="fixedTimer">${timeLeft}</span>
             </div>
-            <h4 style="color: #333; margin-bottom: 10px;">题目 ${quiz.id}</h4>
+            <h4 style="color: #333; margin-bottom: 10px;">题目 ${quizNumber}/${totalQuizzes}</h4>
             <p style="color: #666;">剩余时间: <span id="timeDisplay">${timeLeft}</span> 秒</p>
         </div>
         
@@ -531,10 +738,27 @@ function showFixedQuizResult(result) {
     
     showMessage(result.is_correct ? '回答正确！' : '回答错误', result.is_correct ? 'success' : 'error');
     
-    // 5秒后自动关闭
-    setTimeout(() => {
-        closeFixedQuiz();
-    }, 5000);
+    // 3秒后直接切换到下一题，不关闭当前题目
+    setTimeout(async () => {
+        console.log('题目答题完成，准备切换到下一题');
+        currentQuizId = null;
+        
+        // 重新加载题目序列（更新回答状态）
+        await loadQuizSequence();
+        
+        // 找到下一个未回答的题目
+        const nextQuiz = findNextUnAnsweredQuiz();
+        
+        if (nextQuiz) {
+            console.log('切换到下一题:', nextQuiz.question);
+            // 直接替换当前题目内容，而不是关闭再重新创建
+            replaceQuizContent(nextQuiz);
+        } else {
+            console.log('所有题目已完成');
+            closeFixedQuiz();
+            showAllQuizzesCompleted();
+        }
+    }, 3000);
 }
 
 // 禁用固定题目
@@ -565,7 +789,6 @@ function closeFixedQuiz() {
     }
     
     selectedFixedAnswer = null;
-    currentQuizId = null;
     
     console.log('固定题目显示已关闭');
 }
@@ -640,13 +863,15 @@ function showQuizResult(result) {
     
     showMessage(result.is_correct ? '回答正确！' : '回答错误', result.is_correct ? 'success' : 'error');
     
-    // 5秒后回到等待状态，等待下一题
+    // 3秒后自动切换到下一题
     setTimeout(() => {
-        console.log('答题结果显示完毕，回到等待状态');
-        showWaitingState();
+        console.log('答题结果显示完毕，自动切换到下一题');
         selectedAnswer = null;
         currentQuizId = null;
-    }, 5000);
+        
+        // 检查下一题
+        checkForNewQuiz();
+    }, 3000);
 }
 
 // 禁用题目
