@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app
 from app import db
 from app.models import Quiz, QuizResponse, QuizDiscussion, Content, Session as PQSession, Feedback
 from app.routes.auth import require_auth
@@ -158,42 +158,6 @@ def activate_quiz():
         db.session.rollback()
         return jsonify({'error': f'激活题目失败: {str(e)}'}), 500
 
-@quiz_bp.route('/current/<int:session_id>', methods=['GET'])
-@require_auth
-def get_current_quiz(session_id):
-    """获取当前活跃的题目"""
-    quiz = Quiz.query.filter_by(session_id=session_id, is_active=True).first()
-    
-    if not quiz:
-        return jsonify({'message': '当前没有活跃的题目'})
-    
-    # 检查用户是否已经回答过
-    user_id = session['user_id']
-    response = QuizResponse.query.filter_by(quiz_id=quiz.id, user_id=user_id).first()
-    
-    quiz_data = {
-        'id': quiz.id,
-        'question': quiz.question,
-        'option_a': quiz.option_a,
-        'option_b': quiz.option_b,
-        'option_c': quiz.option_c,
-        'option_d': quiz.option_d,
-        'time_limit': quiz.time_limit,
-        'is_active': quiz.is_active,
-        'has_answered': response is not None
-    }
-    
-    # 如果已经回答，显示答案和结果
-    if response:
-        quiz_data.update({
-            'user_answer': response.answer,
-            'correct_answer': quiz.correct_answer,
-            'is_correct': response.is_correct,
-            'explanation': quiz.explanation
-        })
-    
-    return jsonify({'quiz': quiz_data})
-
 @quiz_bp.route('/answer', methods=['POST'])
 @require_auth
 def submit_answer():
@@ -213,10 +177,91 @@ def submit_answer():
     if not quiz:
         return jsonify({'error': '题目不存在'}), 404
     
-    if not quiz.is_active:
-        return jsonify({'error': '题目已关闭'}), 400
-    
+    # 检查用户是否已经回答过这道题
     user_id = session['user_id']
+    existing_response = QuizResponse.query.filter_by(
+        quiz_id=quiz_id,
+        user_id=user_id
+    ).first()
+    
+    if existing_response:
+        return jsonify({'error': '您已经回答过这道题'}), 400
+    
+    # 检查答案是否正确
+    is_correct = answer == quiz.correct_answer.upper()
+    
+    try:
+        # 保存答题记录
+        response = QuizResponse(
+            quiz_id=quiz_id,
+            user_id=user_id,
+            answer=answer,
+            is_correct=is_correct
+        )
+        
+        db.session.add(response)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'is_correct': is_correct,
+            'correct_answer': quiz.correct_answer,
+            'explanation': quiz.explanation,
+            'user_answer': answer
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'保存答案失败: {str(e)}'}), 500
+
+@quiz_bp.route('/current/<int:session_id>', methods=['GET'])
+def get_current_quiz(session_id):
+    """获取会话的当前活跃题目"""
+    try:
+        # 获取会话的最新活跃题目
+        quiz = Quiz.query.filter_by(
+            session_id=session_id,
+            is_active=True
+        ).order_by(Quiz.created_at.desc()).first()
+        
+        if not quiz:
+            return jsonify({
+                'success': False,
+                'message': '当前没有活跃的题目'
+            })
+        
+        # 如果用户已登录，检查是否已经回答过
+        has_answered = False
+        if 'user_id' in session:
+            user_id = session['user_id']
+            existing_response = QuizResponse.query.filter_by(
+                quiz_id=quiz.id,
+                user_id=user_id
+            ).first()
+            has_answered = existing_response is not None
+        
+        quiz_data = {
+            'id': quiz.id,
+            'question': quiz.question,
+            'option_a': quiz.option_a,
+            'option_b': quiz.option_b,
+            'option_c': quiz.option_c,
+            'option_d': quiz.option_d,
+            'time_limit': quiz.time_limit,
+            'created_at': quiz.created_at.isoformat(),
+            'has_answered': has_answered
+        }
+        
+        return jsonify({
+            'success': True,
+            'quiz': quiz_data
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'获取题目失败: {str(e)}'
+        }), 500
     
     # 检查是否已经回答过
     existing_response = QuizResponse.query.filter_by(quiz_id=quiz_id, user_id=user_id).first()
@@ -425,15 +470,20 @@ def generate_ai_quizzes():
                     quiz = Quiz(
                         session_id=session_id,
                         question=quiz_data['question'],
-                        options=quiz_data['options'],
+                        option_a=quiz_data['option_a'],
+                        option_b=quiz_data['option_b'],
+                        option_c=quiz_data['option_c'],
+                        option_d=quiz_data['option_d'],
                         correct_answer=quiz_data['correct_answer'],
-                        created_by=user_id,
-                        created_at=datetime.utcnow()
+                        explanation=quiz_data.get('explanation', ''),
+                        time_limit=quiz_data.get('time_estimate', 30)
                     )
                     db.session.add(quiz)
                     created_count += 1
                 except Exception as e:
                     print(f"保存题目失败: {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
             
             if created_count == 0:
@@ -456,6 +506,244 @@ def generate_ai_quizzes():
         db.session.rollback()
         print(f"AI题目生成路由错误: {e}")
         return jsonify({'error': '系统错误，请重试'}), 500
+
+@quiz_bp.route('/upload', methods=['POST'])
+def upload_and_generate_quiz():
+    """上传文件并生成题目（简化版API）"""
+    try:
+        # 检查是否有文件
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': '请选择文件'}), 400
+        
+        file = request.files['file']
+        num_questions = int(request.form.get('num_questions', 2))
+        
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'message': '请选择文件'}), 400
+        
+        # 验证文件类型
+        allowed_extensions = ['.pdf', '.ppt', '.pptx']
+        file_ext = '.' + file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'success': False, 'message': '只支持PDF和PPT文件'}), 400
+        
+        # 处理文件并生成题目
+        try:
+            from app.file_processor import FileProcessor
+            from app.quiz_generator import QuizGenerator
+            
+            file_processor = FileProcessor()
+            quiz_generator = QuizGenerator()
+            
+            # 直接从内存中的文件提取文本
+            file_content = file.read()
+            
+            # 提取文本内容
+            if file_ext == '.pdf':
+                text_content = file_processor.extract_text_from_pdf_bytes(file_content)
+            else:  # PPT files
+                text_content = file_processor.extract_text_from_ppt_bytes(file_content)
+            
+            if not text_content or len(text_content.strip()) < 50:
+                return jsonify({'success': False, 'message': '文件内容太少，无法生成题目'}), 400
+            
+            # 使用AI生成题目
+            generated_quizzes = quiz_generator.generate_quiz(text_content, num_questions=num_questions)
+            
+            if not generated_quizzes:
+                return jsonify({'success': False, 'message': 'AI生成题目失败，请检查文件内容'}), 500
+            
+            return jsonify({
+                'success': True,
+                'message': f'成功生成{len(generated_quizzes)}道题目',
+                'questions': generated_quizzes,
+                'file_info': {
+                    'filename': file.filename,
+                    'text_length': len(text_content)
+                }
+            })
+            
+        except Exception as e:
+            print(f"处理文件或生成题目错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'处理失败: {str(e)}'}), 500
+            
+    except Exception as e:
+        print(f"上传API错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': '系统错误，请重试'}), 500
+
+@quiz_bp.route('/send-to-audience', methods=['POST'])
+@require_auth
+def send_quiz_to_audience():
+    """发送题目给听众"""
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('session_id') or not data.get('quiz'):
+            return jsonify({'success': False, 'message': '缺少必要参数'}), 400
+        
+        session_id = data['session_id']
+        quiz_data = data['quiz']
+        
+        # 验证会话存在且用户有权限
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'success': False, 'message': '会话不存在'}), 404
+        
+        user_id = session['user_id']
+        if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
+            return jsonify({'success': False, 'message': '权限不足'}), 403
+        
+        # 保存题目到数据库
+        try:
+            quiz = Quiz(
+                session_id=session_id,
+                question=quiz_data['question'],
+                option_a=quiz_data['option_a'],
+                option_b=quiz_data['option_b'],
+                option_c=quiz_data['option_c'],
+                option_d=quiz_data['option_d'],
+                correct_answer=quiz_data['correct_answer'],
+                explanation=quiz_data.get('explanation', ''),
+                time_limit=quiz_data.get('time_estimate', 30),
+                is_active=True  # 立即激活
+            )
+            
+            # 先关闭该会话的其他活跃题目
+            Quiz.query.filter_by(session_id=session_id, is_active=True).update({'is_active': False})
+            
+            db.session.add(quiz)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': '题目已发送给听众',
+                'quiz_id': quiz.id
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"保存题目失败: {e}")
+            return jsonify({'success': False, 'message': '保存题目失败'}), 500
+            
+    except Exception as e:
+        print(f"发送题目错误: {e}")
+        return jsonify({'success': False, 'message': '系统错误'}), 500
+
+@quiz_bp.route('/send-all-to-audience', methods=['POST'])
+@require_auth
+def send_all_quizzes_to_audience():
+    """发送所有题目给听众"""
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('session_id') or not data.get('questions'):
+            return jsonify({'success': False, 'message': '缺少必要参数'}), 400
+        
+        session_id = data['session_id']
+        questions = data['questions']
+        
+        # 验证会话存在且用户有权限
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'success': False, 'message': '会话不存在'}), 404
+        
+        user_id = session['user_id']
+        if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
+            return jsonify({'success': False, 'message': '权限不足'}), 403
+        
+        # 保存所有题目到数据库
+        saved_count = 0
+        active_quiz_id = None
+        try:
+            # 先关闭该会话的其他活跃题目
+            Quiz.query.filter_by(session_id=session_id, is_active=True).update({'is_active': False})
+            
+            for i, quiz_data in enumerate(questions):
+                # 第一道题目设为活跃，其他题目待用
+                is_first_quiz = (i == 0)
+                
+                quiz = Quiz(
+                    session_id=session_id,
+                    question=quiz_data['question'],
+                    option_a=quiz_data['option_a'],
+                    option_b=quiz_data['option_b'],
+                    option_c=quiz_data['option_c'],
+                    option_d=quiz_data['option_d'],
+                    correct_answer=quiz_data['correct_answer'],
+                    explanation=quiz_data.get('explanation', ''),
+                    time_limit=quiz_data.get('time_estimate', 30),
+                    is_active=is_first_quiz  # 第一道题目立即激活
+                )
+                
+                db.session.add(quiz)
+                saved_count += 1
+                
+                # 记录第一道题目的ID
+                if is_first_quiz:
+                    db.session.flush()  # 获取quiz.id
+                    active_quiz_id = quiz.id
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'成功发送 {saved_count} 道题目，第一道题目已激活',
+                'saved_count': saved_count,
+                'active_quiz_id': active_quiz_id
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"保存题目失败: {e}")
+            return jsonify({'success': False, 'message': '保存题目失败'}), 500
+            
+    except Exception as e:
+        print(f"发送所有题目错误: {e}")
+        return jsonify({'success': False, 'message': '系统错误'}), 500
+
+@quiz_bp.route('/session-quizzes/<int:session_id>', methods=['GET'])
+@require_auth
+def get_session_quizzes(session_id):
+    """获取会话的所有题目"""
+    try:
+        # 验证会话存在
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'error': '会话不存在'}), 404
+        
+        # 获取题目列表
+        quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.desc()).all()
+        
+        quiz_list = []
+        for quiz in quizzes:
+            quiz_list.append({
+                'id': quiz.id,
+                'question': quiz.question,
+                'option_a': quiz.option_a,
+                'option_b': quiz.option_b,
+                'option_c': quiz.option_c,
+                'option_d': quiz.option_d,
+                'correct_answer': quiz.correct_answer,
+                'explanation': quiz.explanation,
+                'time_limit': quiz.time_limit,
+                'is_active': quiz.is_active,
+                'created_at': quiz.created_at.isoformat()
+            })
+        
+        return jsonify({
+            'success': True,
+            'quizzes': quiz_list,
+            'total': len(quiz_list)
+        })
+        
+    except Exception as e:
+        print(f"获取题目列表错误: {e}")
+        return jsonify({'error': '系统错误'}), 500
 
 @quiz_bp.route('/test-upload', methods=['POST'])
 def test_file_upload():

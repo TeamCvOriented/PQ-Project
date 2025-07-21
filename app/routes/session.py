@@ -68,14 +68,20 @@ def list_sessions():
         # 演讲者查看自己的会话
         sessions = PQSession.query.filter_by(speaker_id=user_id).all()
     else:
-        # 听众查看参与的会话
-        participant_sessions = db.session.query(PQSession).join(SessionParticipant).filter(
-            SessionParticipant.user_id == user_id
-        ).all()
-        sessions = participant_sessions
+        # 听众查看所有活跃的会话（可以加入的会话）
+        sessions = PQSession.query.filter_by(is_active=True).all()
     
     session_list = []
     for s in sessions:
+        # 检查听众是否已经参与该会话
+        is_participant = False
+        if user_role == 'listener':
+            participant = SessionParticipant.query.filter_by(
+                session_id=s.id, 
+                user_id=user_id
+            ).first()
+            is_participant = participant is not None
+        
         session_list.append({
             'id': s.id,
             'title': s.title,
@@ -85,7 +91,8 @@ def list_sessions():
             'is_active': s.is_active,
             'quiz_interval': s.quiz_interval,
             'created_at': s.created_at.isoformat(),
-            'participant_count': len(s.participants)
+            'participant_count': len(s.participants),
+            'is_participant': is_participant  # 听众是否已参与
         })
     
     return jsonify({

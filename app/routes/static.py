@@ -37,3 +37,24 @@ def test_upload():
 def register_page():
     """注册页面"""
     return render_template('register.html')
+
+@static_bp.route('/test-listener')
+def test_listener():
+    """测试听众页面"""
+    return render_template('test_listener.html')
+
+@static_bp.route('/test-simple')
+def test_simple():
+    """简单测试页面"""
+    from flask import send_file
+    import os
+    test_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'test_listener_simple.html')
+    return send_file(test_file)
+
+@static_bp.route('/test-display')
+def test_display():
+    """题目显示测试页面"""
+    from flask import send_file
+    import os
+    test_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'test_quiz_display.html')
+    return send_file(test_file)

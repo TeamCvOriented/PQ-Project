@@ -213,45 +213,27 @@ class QuizGenerator:
             else:
                 raise ValueError("响应格式不正确")
             
-            # 转换为统一格式，符合数据库模型要求
+            # 转换为统一格式
             result = []
             for q in questions:
                 if isinstance(q, dict) and 'question' in q:
-                    # 获取选项列表
-                    options = q.get('options', [])
-                    if not isinstance(options, list):
-                        options = [
+                    formatted_q = {
+                        'question': q.get('question', ''),
+                        'options': q.get('options', []),
+                        'correct_answer': q.get('correct_answer', 0),
+                        'explanation': q.get('explanation', ''),
+                        'difficulty': q.get('difficulty', 'medium'),
+                        'time_estimate': q.get('time_estimate', 20)
+                    }
+                    
+                    # 确保选项是列表格式
+                    if not isinstance(formatted_q['options'], list):
+                        formatted_q['options'] = [
                             q.get('option_a', '选项A'),
                             q.get('option_b', '选项B'),
                             q.get('option_c', '选项C'),
                             q.get('option_d', '选项D')
                         ]
-                    
-                    # 确保有4个选项
-                    while len(options) < 4:
-                        options.append(f"选项{len(options)+1}")
-                    
-                    # 获取正确答案并转换为字母格式
-                    correct_answer_num = q.get('correct_answer', 0)
-                    if isinstance(correct_answer_num, str):
-                        # 如果已经是字母格式，直接使用
-                        correct_answer_letter = correct_answer_num.upper()
-                    else:
-                        # 如果是数字格式，转换为字母
-                        answer_map = {0: 'A', 1: 'B', 2: 'C', 3: 'D'}
-                        correct_answer_letter = answer_map.get(correct_answer_num, 'A')
-                    
-                    formatted_q = {
-                        'question': q.get('question', ''),
-                        'option_a': options[0] if len(options) > 0 else '选项A',
-                        'option_b': options[1] if len(options) > 1 else '选项B',
-                        'option_c': options[2] if len(options) > 2 else '选项C',
-                        'option_d': options[3] if len(options) > 3 else '选项D',
-                        'correct_answer': correct_answer_letter,
-                        'explanation': q.get('explanation', ''),
-                        'difficulty': q.get('difficulty', 'medium'),
-                        'time_estimate': q.get('time_estimate', 20)
-                    }
                     
                     result.append(formatted_q)
             

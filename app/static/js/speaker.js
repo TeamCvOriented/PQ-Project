@@ -518,22 +518,26 @@ async function generateAIQuizzes() {
     try {
         const formData = new FormData();
         formData.append('file', uploadedFile);
-        formData.append('session_id', sessionId);
+        formData.append('num_questions', '5'); // 生成5道题目
         
-        const response = await fetch('/api/quiz/generate-ai-quizzes', {
+        const response = await fetch('/api/quiz/upload', {
             method: 'POST',
             body: formData
         });
         
         if (response.ok) {
             const result = await response.json();
-            showMessage(`成功生成${result.count}道题目`, 'success');
-            
-            // 清除上传的文件
-            clearUploadedFile();
-            
-            // 重新加载题目列表
-            loadQuizzes(sessionId);
+            if (result.success) {
+                showMessage(`成功生成${result.questions.length}道题目`, 'success');
+                
+                // 显示生成的题目
+                displayGeneratedQuizzes(result.questions, sessionId);
+                
+                // 清除上传的文件
+                clearUploadedFile();
+            } else {
+                showMessage(result.message || 'AI生成题目失败', 'error');
+            }
         } else {
             const error = await response.json();
             showMessage(error.message || 'AI生成题目失败', 'error');
@@ -544,5 +548,214 @@ async function generateAIQuizzes() {
     } finally {
         generateBtn.disabled = false;
         generateBtn.innerHTML = originalText;
+    }
+}
+
+// 显示生成的题目
+function displayGeneratedQuizzes(questions, sessionId) {
+    const container = document.getElementById('quizzesList');
+    
+    if (questions.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无题目</p>';
+        return;
+    }
+    
+    // 将题目数据存储在全局变量中
+    window.currentGeneratedQuizzes = questions;
+    window.currentSessionId = sessionId;
+    
+    container.innerHTML = `
+        <div class="alert alert-success">
+            <h5><i class="fas fa-check-circle me-2"></i>成功生成 ${questions.length} 道题目</h5>
+            <p class="mb-0">请预览题目，然后选择发送给听众</p>
+        </div>
+        
+        ${questions.map((quiz, index) => `
+            <div class="card quiz-card mb-3" data-quiz-index="${index}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">题目 ${index + 1}</h6>
+                    <div>
+                        <button class="btn btn-primary btn-sm me-2" onclick="sendSingleQuizToAudience(${index})">
+                            <i class="fas fa-paper-plane me-1"></i>发送给听众
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="previewQuiz(${index})">
+                            <i class="fas fa-eye me-1"></i>预览
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h6 class="mb-3">${quiz.question}</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="option-item mb-2">
+                                <span class="option-badge bg-primary">A</span>
+                                ${quiz.option_a}
+                            </div>
+                            <div class="option-item mb-2">
+                                <span class="option-badge bg-secondary">B</span>
+                                ${quiz.option_b}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="option-item mb-2">
+                                <span class="option-badge bg-info">C</span>
+                                ${quiz.option_c}
+                            </div>
+                            <div class="option-item mb-2">
+                                <span class="option-badge bg-warning">D</span>
+                                ${quiz.option_d}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <strong>正确答案：</strong>
+                        <span class="badge bg-success">${quiz.correct_answer}</span>
+                        <div class="mt-2">
+                            <strong>解释：</strong>${quiz.explanation}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('')}
+        
+        <div class="text-center mt-4">
+            <button class="btn btn-success btn-lg" id="sendAllQuizzesBtn" onclick="sendAllQuizzesToAudienceWrapper()">
+                <i class="fas fa-broadcast-tower me-2"></i>发送所有题目给听众
+            </button>
+        </div>
+    `;
+}
+
+// 发送单个题目给听众的wrapper函数
+async function sendSingleQuizToAudience(quizIndex) {
+    if (!window.currentGeneratedQuizzes || !window.currentSessionId) {
+        showMessage('数据丢失，请重新生成题目', 'error');
+        return;
+    }
+    
+    const quizData = window.currentGeneratedQuizzes[quizIndex];
+    const sessionId = window.currentSessionId;
+    
+    await sendQuizToAudience(quizIndex, sessionId, quizData);
+}
+
+// 发送所有题目给听众的wrapper函数
+async function sendAllQuizzesToAudienceWrapper() {
+    if (!window.currentGeneratedQuizzes || !window.currentSessionId) {
+        showMessage('数据丢失，请重新生成题目', 'error');
+        return;
+    }
+    
+    await sendAllQuizzesToAudience(window.currentSessionId, window.currentGeneratedQuizzes);
+}
+
+// 发送单个题目给听众
+async function sendQuizToAudience(quizIndex, sessionId, quizData) {
+    try {
+        const response = await fetch('/api/quiz/send-to-audience', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                quiz: quizData,
+                quiz_index: quizIndex
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            showMessage(`题目 ${quizIndex + 1} 已发送给听众`, 'success');
+            
+            // 更新题目卡片状态
+            const quizCard = document.querySelector(`[data-quiz-index="${quizIndex}"]`);
+            if (quizCard) {
+                quizCard.classList.add('quiz-active');
+                const sendBtn = quizCard.querySelector('button[onclick*="sendSingleQuizToAudience"]');
+                if (sendBtn) {
+                    sendBtn.innerHTML = '<i class="fas fa-check me-1"></i>已发送';
+                    sendBtn.disabled = true;
+                    sendBtn.classList.remove('btn-primary');
+                    sendBtn.classList.add('btn-success');
+                }
+            }
+        } else {
+            const error = await response.json();
+            showMessage(error.message || '发送失败', 'error');
+        }
+    } catch (error) {
+        console.error('发送题目错误:', error);
+        showMessage('网络错误，请重试', 'error');
+    }
+}
+
+// 发送所有题目给听众
+async function sendAllQuizzesToAudience(sessionId, questions) {
+    console.log('开始发送所有题目:', { sessionId, questionsCount: questions.length });
+    
+    try {
+        showMessage('正在发送所有题目...', 'info');
+        
+        const response = await fetch('/api/quiz/send-all-to-audience', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                questions: questions
+            })
+        });
+        
+        console.log('发送响应状态:', response.status);
+        
+        const result = await response.json();
+        console.log('发送响应数据:', result);
+        
+        if (response.ok && result.success) {
+            showMessage(`成功发送 ${questions.length} 道题目给听众！第一道题目已激活`, 'success');
+            
+            // 更新所有题目卡片状态
+            document.querySelectorAll('.quiz-card').forEach((card, index) => {
+                card.classList.add('quiz-active');
+                const sendBtn = card.querySelector('button[onclick*="sendSingleQuizToAudience"]');
+                if (sendBtn) {
+                    sendBtn.innerHTML = '<i class="fas fa-check me-1"></i>已发送';
+                    sendBtn.disabled = true;
+                    sendBtn.classList.remove('btn-primary');
+                    sendBtn.classList.add('btn-success');
+                }
+            });
+            
+            // 更新批量发送按钮
+            const sendAllBtn = document.getElementById('sendAllQuizzesBtn');
+            if (sendAllBtn) {
+                sendAllBtn.innerHTML = '<i class="fas fa-check me-2"></i>已发送所有题目';
+                sendAllBtn.disabled = true;
+                sendAllBtn.classList.remove('btn-success');
+                sendAllBtn.classList.add('btn-secondary');
+            }
+            
+        } else {
+            const errorMessage = result.message || '发送失败';
+            console.error('发送失败:', errorMessage);
+            showMessage(errorMessage, 'error');
+        }
+    } catch (error) {
+        console.error('发送题目错误:', error);
+        showMessage('网络错误，请重试', 'error');
+    }
+}
+
+// 预览题目
+function previewQuiz(quizIndex) {
+    const quizCard = document.querySelector(`[data-quiz-index="${quizIndex}"]`);
+    if (quizCard) {
+        quizCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        quizCard.style.transform = 'scale(1.02)';
+        setTimeout(() => {
+            quizCard.style.transform = 'scale(1)';
+        }, 300);
     }
 }

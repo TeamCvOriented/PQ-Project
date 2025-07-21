@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>听众界面测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .test-quiz {
+            background: white;
+            border: 2px solid #007bff;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>听众界面测试</h1>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h3>调试信息</h3>
+                <div id="debugInfo" class="debug-info">等待加载...</div>
+                
+                <button onclick="testAPI()" class="btn btn-primary">测试API</button>
+                <button onclick="testDisplay()" class="btn btn-success">测试显示</button>
+                <button onclick="clearTest()" class="btn btn-warning">清空</button>
+            </div>
+            
+            <div class="col-md-6">
+                <h3>题目显示测试</h3>
+                <div id="testQuizArea" style="min-height: 400px; border: 1px dashed #ccc; padding: 20px;">
+                    等待题目...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let debugLog = [];
+        
+        function log(message) {
+            debugLog.push(`[${new Date().toLocaleTimeString()}] ${message}`);
+            document.getElementById('debugInfo').innerHTML = debugLog.slice(-20).join('<br>');
+            console.log(message);
+        }
+        
+        async function testAPI() {
+            log('开始测试API...');
+            
+            try {
+                const response = await fetch('/api/quiz/current/1');
+                log(`API响应状态: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`API响应成功: ${JSON.stringify(data, null, 2)}`);
+                    
+                    if (data.success && data.quiz) {
+                        log('找到题目数据，准备显示');
+                        displayTestQuiz(data.quiz);
+                    } else {
+                        log('没有活跃题目');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    log(`API错误: ${errorText}`);
+                }
+            } catch (error) {
+                log(`请求失败: ${error.message}`);
+            }
+        }
+        
+        function displayTestQuiz(quiz) {
+            log('开始显示题目...');
+            
+            const quizArea = document.getElementById('testQuizArea');
+            
+            const quizHTML = `
+                <div class="test-quiz">
+                    <h4>${quiz.question}</h4>
+                    <div style="margin: 15px 0;">
+                        <div onclick="selectTestOption('A', this)" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; margin: 10px 0; cursor: pointer;">
+                            <strong>A.</strong> ${quiz.option_a}
+                        </div>
+                        <div onclick="selectTestOption('B', this)" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; margin: 10px 0; cursor: pointer;">
+                            <strong>B.</strong> ${quiz.option_b}
+                        </div>
+                        <div onclick="selectTestOption('C', this)" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; margin: 10px 0; cursor: pointer;">
+                            <strong>C.</strong> ${quiz.option_c}
+                        </div>
+                        <div onclick="selectTestOption('D', this)" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; margin: 10px 0; cursor: pointer;">
+                            <strong>D.</strong> ${quiz.option_d}
+                        </div>
+                    </div>
+                    <button class="btn btn-primary">提交答案</button>
+                </div>
+            `;
+            
+            quizArea.innerHTML = quizHTML;
+            log('题目显示完成');
+        }
+        
+        function selectTestOption(option, element) {
+            log(`选择了选项: ${option}`);
+            
+            // 移除其他选项的选中状态
+            const options = document.querySelectorAll('#testQuizArea div[onclick*="selectTestOption"]');
+            options.forEach(opt => {
+                opt.style.backgroundColor = '#f8f9fa';
+                opt.style.borderColor = '#dee2e6';
+            });
+            
+            // 选中当前选项
+            element.style.backgroundColor = '#007bff';
+            element.style.color = 'white';
+            element.style.borderColor = '#007bff';
+        }
+        
+        function testDisplay() {
+            log('测试硬编码题目显示...');
+            
+            const testQuiz = {
+                id: 999,
+                question: "这是一个测试题目，用于验证显示功能是否正常？",
+                option_a: "选项A - 测试选项1",
+                option_b: "选项B - 测试选项2", 
+                option_c: "选项C - 测试选项3",
+                option_d: "选项D - 测试选项4",
+                time_limit: 30
+            };
+            
+            displayTestQuiz(testQuiz);
+        }
+        
+        function clearTest() {
+            document.getElementById('testQuizArea').innerHTML = '等待题目...';
+            debugLog = [];
+            document.getElementById('debugInfo').innerHTML = '调试信息已清空';
+            log('测试环境已清空');
+        }
+        
+        // 页面加载完成后自动测试
+        document.addEventListener('DOMContentLoaded', function() {
+            log('测试页面加载完成');
+            setTimeout(() => {
+                log('5秒后自动测试API...');
+                testAPI();
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
