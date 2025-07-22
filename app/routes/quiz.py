@@ -587,20 +587,37 @@ def upload_and_generate_quiz():
             # 直接从内存中的文件提取文本
             file_content = file.read()
             
+            print(f"文件大小: {len(file_content)} 字节")
+            print(f"文件类型: {file_ext}")
+            
             # 提取文本内容
             if file_ext == '.pdf':
                 text_content = file_processor.extract_text_from_pdf_bytes(file_content)
             else:  # PPT files
                 text_content = file_processor.extract_text_from_ppt_bytes(file_content)
             
-            if not text_content or len(text_content.strip()) < 50:
-                return jsonify({'success': False, 'message': '文件内容太少，无法生成题目'}), 400
+            print(f"提取到的文本长度: {len(text_content) if text_content else 0}")
+            
+            # 检查文本内容是否有效
+            if not text_content:
+                return jsonify({'success': False, 'message': '无法从文件中提取文本内容，请检查文件格式是否正确'}), 400
+            
+            if isinstance(text_content, str) and text_content.startswith('不支持'):
+                return jsonify({'success': False, 'message': text_content}), 400
+            
+            if isinstance(text_content, str) and '处理' in text_content and '失败' in text_content:
+                return jsonify({'success': False, 'message': text_content}), 400
+                
+            if len(text_content.strip()) < 50:
+                return jsonify({'success': False, 'message': '文件内容太少，无法生成题目。至少需要50个字符的文本内容。'}), 400
+            
+            print(f"开始使用AI生成 {num_questions} 道题目...")
             
             # 使用AI生成题目
             generated_quizzes = quiz_generator.generate_quiz(text_content, num_questions=num_questions)
             
             if not generated_quizzes:
-                return jsonify({'success': False, 'message': 'AI生成题目失败，请检查文件内容'}), 500
+                return jsonify({'success': False, 'message': 'AI生成题目失败，请检查文件内容或稍后重试'}), 500
             
             return jsonify({
                 'success': True,

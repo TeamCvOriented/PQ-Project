@@ -279,17 +279,70 @@ class FileProcessor:
         
         try:
             ppt_file = io.BytesIO(ppt_bytes)
-            presentation = Presentation(ppt_file)
             
-            for slide in presentation.slides:
-                # 提取文本框内容
-                for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text.strip():
-                        text_content.append(shape.text)
+            # 检查文件是否为有效的PowerPoint文件
+            if len(ppt_bytes) < 100:
+                raise ValueError("文件太小，可能不是有效的PPT文件")
+            
+            # 检查文件头以确定文件类型
+            ppt_file.seek(0)
+            header = ppt_file.read(8)
+            ppt_file.seek(0)
+            
+            # .pptx 文件是ZIP格式，应该以 'PK' 开头
+            # .ppt 文件是OLE格式，有不同的头部
+            if header[:2] == b'PK':
+                # 这是 .pptx 文件 (ZIP格式)
+                try:
+                    presentation = Presentation(ppt_file)
+                    
+                    for slide in presentation.slides:
+                        # 提取文本框内容
+                        for shape in slide.shapes:
+                            if hasattr(shape, "text") and shape.text.strip():
+                                text_content.append(shape.text)
+                except Exception as e:
+                    print(f"处理PPTX文件时出错: {str(e)}")
+                    # 如果python-pptx处理失败，尝试其他方法
+                    return self._extract_text_from_ppt_alternative(ppt_bytes)
+            
+            elif header[:8] == b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1':
+                # 这是老版本的 .ppt 文件 (OLE格式)
+                print("检测到旧版本PPT文件(.ppt)，当前版本暂不支持，请转换为.pptx格式")
+                return "不支持旧版本PPT文件，请将文件另存为.pptx格式后重新上传"
+            
+            else:
+                # 未知文件格式
+                print(f"未知的文件格式，文件头: {header.hex()}")
+                return "文件格式不正确，请确保上传的是有效的PPT或PPTX文件"
+                
         except Exception as e:
             print(f"从PPT字节流读取文本时出错: {str(e)}")
+            return f"处理PPT文件时出错: {str(e)}"
+        
+        if not text_content:
+            return "未能从PPT文件中提取到文本内容，请检查文件是否包含文本"
         
         return '\n'.join(text_content)
+    
+    def _extract_text_from_ppt_alternative(self, ppt_bytes):
+        """PPT文件处理的备用方法"""
+        try:
+            # 尝试将文件保存为临时文件然后处理
+            with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as temp_file:
+                temp_file.write(ppt_bytes)
+                temp_file.flush()
+                
+                # 使用文件路径方式处理
+                text_content = self.extract_text_from_ppt(temp_file.name)
+                
+                # 清理临时文件
+                os.unlink(temp_file.name)
+                
+                return text_content
+        except Exception as e:
+            print(f"备用PPT处理方法也失败: {str(e)}")
+            return f"PPT文件处理失败: {str(e)}"
 
 # 文件类型检测函数
 def detect_file_type(filename):
