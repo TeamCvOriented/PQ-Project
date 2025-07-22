@@ -262,6 +262,54 @@ def get_current_quiz(session_id):
             'success': False,
             'error': f'获取题目失败: {str(e)}'
         }), 500
+
+@quiz_bp.route('/session-sequence/<int:session_id>', methods=['GET'])
+def get_session_quiz_sequence(session_id):
+    """获取会话的题目序列（按创建时间排序）"""
+    try:
+        # 获取会话的所有题目，按创建时间排序
+        quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
+        
+        if not quizzes:
+            return jsonify({
+                'success': False,
+                'message': '该会话没有题目'
+            })
+        
+        # 如果用户已登录，检查每个题目的回答状态
+        user_answered_quizzes = set()
+        if 'user_id' in session:
+            user_id = session['user_id']
+            responses = QuizResponse.query.filter_by(user_id=user_id).all()
+            user_answered_quizzes = {r.quiz_id for r in responses}
+        
+        quiz_sequence = []
+        for i, quiz in enumerate(quizzes):
+            quiz_sequence.append({
+                'id': quiz.id,
+                'question': quiz.question,
+                'option_a': quiz.option_a,
+                'option_b': quiz.option_b,
+                'option_c': quiz.option_c,
+                'option_d': quiz.option_d,
+                'time_limit': quiz.time_limit,
+                'is_active': quiz.is_active,
+                'has_answered': quiz.id in user_answered_quizzes,
+                'order_index': i,  # 题目顺序索引
+                'created_at': quiz.created_at.isoformat()
+            })
+        
+        return jsonify({
+            'success': True,
+            'quiz_sequence': quiz_sequence,
+            'total_count': len(quiz_sequence)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'获取题目序列失败: {str(e)}'
+        }), 500
     
     # 检查是否已经回答过
     existing_response = QuizResponse.query.filter_by(quiz_id=quiz_id, user_id=user_id).first()
@@ -576,6 +624,79 @@ def upload_and_generate_quiz():
         traceback.print_exc()
         return jsonify({'success': False, 'message': '系统错误，请重试'}), 500
 
+@quiz_bp.route('/auto-activate-next/<int:session_id>', methods=['POST'])
+@require_auth
+def auto_activate_next_quiz(session_id):
+    """自动激活下一题"""
+    try:
+        # 验证会话存在且用户有权限
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'success': False, 'message': '会话不存在'}), 404
+        
+        user_id = session['user_id']
+        if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
+            return jsonify({'success': False, 'message': '权限不足'}), 403
+        
+        # 获取该会话的所有题目，按创建时间排序
+        all_quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
+        
+        if not all_quizzes:
+            return jsonify({'success': False, 'message': '该会话没有题目'}), 404
+        
+        # 查找当前活跃的题目
+        current_active_quiz = None
+        current_index = -1
+        for i, quiz in enumerate(all_quizzes):
+            if quiz.is_active:
+                current_active_quiz = quiz
+                current_index = i
+                break
+        
+        # 如果没有活跃题目，激活第一题
+        if current_active_quiz is None:
+            first_quiz = all_quizzes[0]
+            first_quiz.is_active = True
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': '已激活第一题',
+                'current_quiz_id': first_quiz.id,
+                'quiz_index': 0,
+                'total_quizzes': len(all_quizzes)
+            })
+        
+        # 如果当前是最后一题，返回完成状态
+        if current_index >= len(all_quizzes) - 1:
+            return jsonify({
+                'success': True,
+                'message': '所有题目已完成',
+                'is_finished': True,
+                'total_quizzes': len(all_quizzes)
+            })
+        
+        # 激活下一题
+        next_quiz = all_quizzes[current_index + 1]
+        
+        # 关闭当前题目，激活下一题
+        current_active_quiz.is_active = False
+        next_quiz.is_active = True
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'已激活第{current_index + 2}题',
+            'current_quiz_id': next_quiz.id,
+            'quiz_index': current_index + 1,
+            'total_quizzes': len(all_quizzes)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"自动激活下一题错误: {e}")
+        return jsonify({'success': False, 'message': '系统错误'}), 500
+
 @quiz_bp.route('/send-to-audience', methods=['POST'])
 @require_auth
 def send_quiz_to_audience():
@@ -658,15 +779,12 @@ def send_all_quizzes_to_audience():
         
         # 保存所有题目到数据库
         saved_count = 0
-        active_quiz_id = None
         try:
             # 先关闭该会话的其他活跃题目
             Quiz.query.filter_by(session_id=session_id, is_active=True).update({'is_active': False})
             
             for i, quiz_data in enumerate(questions):
-                # 第一道题目设为活跃，其他题目待用
-                is_first_quiz = (i == 0)
-                
+                # 所有题目都设为活跃，让听众可以按顺序答题
                 quiz = Quiz(
                     session_id=session_id,
                     question=quiz_data['question'],
@@ -677,24 +795,18 @@ def send_all_quizzes_to_audience():
                     correct_answer=quiz_data['correct_answer'],
                     explanation=quiz_data.get('explanation', ''),
                     time_limit=quiz_data.get('time_estimate', 30),
-                    is_active=is_first_quiz  # 第一道题目立即激活
+                    is_active=True  # 所有题目都激活
                 )
                 
                 db.session.add(quiz)
                 saved_count += 1
-                
-                # 记录第一道题目的ID
-                if is_first_quiz:
-                    db.session.flush()  # 获取quiz.id
-                    active_quiz_id = quiz.id
             
             db.session.commit()
             
             return jsonify({
                 'success': True,
-                'message': f'成功发送 {saved_count} 道题目，第一道题目已激活',
-                'saved_count': saved_count,
-                'active_quiz_id': active_quiz_id
+                'message': f'成功发送 {saved_count} 道题目，所有题目已激活',
+                'saved_count': saved_count
             })
             
         except Exception as e:
