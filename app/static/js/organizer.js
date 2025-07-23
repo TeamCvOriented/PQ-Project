@@ -20,6 +20,14 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.add('active');
         });
     });
+    
+    // 统计页面会话选择事件监听器
+    const sessionSelect = document.getElementById('sessionSelect');
+    if (sessionSelect) {
+        sessionSelect.addEventListener('change', function() {
+            loadSessionStatistics(this.value);
+        });
+    }
 });
 
 
@@ -93,22 +101,57 @@ async function loadDashboardData() {
             const data = await response.json();
             const sessions = data.sessions;
             
-            // 更新统计数据
+            // 更新会话数量
             document.getElementById('totalSessions').textContent = sessions.length;
             
             let totalParticipants = 0;
             let totalQuizzes = 0;
-            sessions.forEach(session => {
+            let totalResponses = 0;
+            let totalCorrect = 0;
+            
+            // 为每个会话获取统计数据
+            const statsPromises = sessions.map(async (session) => {
                 totalParticipants += session.participant_count || 0;
+                
+                try {
+                    const statsResponse = await fetch(`/api/quiz/statistics/${session.id}`);
+                    if (statsResponse.ok) {
+                        const statsData = await statsResponse.json();
+                        const quizStats = statsData.quiz_statistics || [];
+                        
+                        totalQuizzes += quizStats.length;
+                        
+                        quizStats.forEach(quiz => {
+                            totalResponses += quiz.total_responses || 0;
+                            totalCorrect += quiz.correct_responses || 0;
+                        });
+                    }
+                } catch (error) {
+                    console.error(`获取会话 ${session.id} 统计失败:`, error);
+                }
             });
             
+            // 等待所有统计数据加载完成
+            await Promise.all(statsPromises);
+            
+            // 更新显示
             document.getElementById('totalParticipants').textContent = totalParticipants;
+            document.getElementById('totalQuizzes').textContent = totalQuizzes;
+            
+            // 计算平均正确率
+            const avgAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses * 100).toFixed(1) : 0;
+            document.getElementById('avgAccuracy').textContent = `${avgAccuracy}%`;
             
             // 显示最近的会话
             displayRecentSessions(sessions.slice(0, 5));
         }
     } catch (error) {
         console.error('加载仪表板数据失败:', error);
+        // 设置默认值
+        document.getElementById('totalSessions').textContent = '0';
+        document.getElementById('totalParticipants').textContent = '0';
+        document.getElementById('totalQuizzes').textContent = '0';
+        document.getElementById('avgAccuracy').textContent = '0%';
     }
 }
 
@@ -379,75 +422,272 @@ async function loadStatistics() {
         const response = await fetch('/api/session/list');
         if (response.ok) {
             const data = await response.json();
-            const select = document.getElementById('sessionSelect');
-            select.innerHTML = '<option value="">选择会话</option>';
-            data.sessions.forEach(session => {
-                const option = document.createElement('option');
-                option.value = session.id;
-                option.textContent = session.title;
-                select.appendChild(option);
-            });
+            updateStatsSessionSelect(data.sessions);
         }
     } catch (error) {
         console.error('加载统计失败:', error);
+        showMessage('加载会话列表失败', 'error');
     }
 }
 
-async function loadSessionStats(sessionId) {
-    if (!sessionId) return;
+// 更新统计页面的会话选择下拉框
+function updateStatsSessionSelect(sessions) {
+    const select = document.getElementById('sessionSelect');
+    select.innerHTML = '<option value="">选择会话</option>';
+    
+    sessions.forEach(session => {
+        const option = document.createElement('option');
+        option.value = session.id;
+        option.textContent = `${session.title} (${session.is_active ? '进行中' : '已结束'})`;
+        select.appendChild(option);
+    });
+}
+
+// 加载会话统计数据
+async function loadSessionStatistics(sessionId) {
+    if (!sessionId) {
+        document.getElementById('statisticsContent').innerHTML = '<div class="text-center text-muted py-5">请选择一个会话查看统计数据</div>';
+        return;
+    }
+
     try {
         const response = await fetch(`/api/quiz/statistics/${sessionId}`);
         if (response.ok) {
             const data = await response.json();
-            const container = document.getElementById('quizStats');
-            container.innerHTML = data.quiz_statistics.map(quiz => `
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h5>${quiz.question}</h5>
-                        <p>总回答: ${quiz.total_responses} | 答对: ${quiz.correct_responses} | 正确率: ${quiz.accuracy_rate}%</p>
-                        <p>选项分布: A:${quiz.option_distribution.A} B:${quiz.option_distribution.B} C:${quiz.option_distribution.C} D:${quiz.option_distribution.D}</p>
-                    </div>
-                </div>
-            `).join('') || '<p>暂无统计数据</p>';
+            displayStatistics(data);
+        } else {
+            const errorData = await response.json();
+            showMessage(errorData.error || '加载统计数据失败', 'error');
         }
     } catch (error) {
         console.error('加载会话统计失败:', error);
+        showMessage('网络错误，请稍后重试', 'error');
     }
 }
 
-// 在 showSection 中调用
-// 移除以下多余代码：
-// case 'statistics':
-//     loadStatistics();
-//     break;
+// 显示统计数据
+// 显示统计数据
+function displayStatistics(data) {
+    const container = document.getElementById('statisticsContent');
+    
+    if (!data.quiz_statistics || data.quiz_statistics.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-5">该会话暂无题目统计数据</div>';
+        return;
+    }
 
-// 登出
-async function logout() {
-    try {
-        const response = await fetch('/api/auth/logout', { method: 'POST' });
-        if (response.ok) {
-            window.location.href = '/login';
+    // 计算总体统计
+    const totalQuizzes = data.quiz_statistics.length;
+    const totalResponses = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.total_responses, 0);
+    const totalCorrect = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.correct_responses, 0);
+    const overallAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses * 100).toFixed(1) : 0;
+
+    let html = `
+        <!-- 总体统计卡片 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-question-circle fa-2x mb-2"></i>
+                        <h4>${totalQuizzes}</h4>
+                        <p class="mb-0">总题目数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-users fa-2x mb-2"></i>
+                        <h4>${totalResponses}</h4>
+                        <p class="mb-0">总回答数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-check-circle fa-2x mb-2"></i>
+                        <h4>${totalCorrect}</h4>
+                        <p class="mb-0">正确回答数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-percentage fa-2x mb-2"></i>
+                        <h4>${overallAccuracy}%</h4>
+                        <p class="mb-0">总体正确率</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 状态说明 -->
+        <div class="alert alert-info mb-4">
+            <h6><i class="fas fa-info-circle me-2"></i>状态说明</h6>
+            <p class="mb-0">
+                <span class="badge bg-success me-2">已激活</span>题目已发送给听众，可以接收答案
+                <span class="badge bg-secondary ms-3 me-2">未激活</span>题目已创建但未发送给听众，听众无法看到和回答
+            </p>
+        </div>
+
+        <!-- 题目详细统计 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>题目详细统计</h5>
+            </div>
+            <div class="card-body">
+    `;
+
+    data.quiz_statistics.forEach((quiz, index) => {
+        const accuracy = quiz.total_responses > 0 ? quiz.accuracy_rate.toFixed(1) : 0;
+        const statusBadge = quiz.is_active ? 
+            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>已激活</span>' : 
+            '<span class="badge bg-secondary"><i class="fas fa-pause me-1"></i>未激活</span>';
+        
+        // 格式化创建时间
+        const createdDate = new Date(quiz.created_at);
+        const formattedDate = createdDate.toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        // 获取选项内容，处理undefined情况
+        const options = {
+            'A': quiz.option_a || '选项A内容未设置',
+            'B': quiz.option_b || '选项B内容未设置',
+            'C': quiz.option_c || '选项C内容未设置',
+            'D': quiz.option_d || '选项D内容未设置'
+        };
+
+        html += `
+            <div class="quiz-stat-item mb-4 border rounded shadow-sm">
+                <!-- 题目头部 -->
+                <div class="quiz-header bg-light p-3 border-bottom">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-primary me-2">题目 ${index + 1}</span>
+                                ${statusBadge}
+                                <span class="badge bg-info ms-2">ID: ${quiz.id}</span>
+                            </div>
+                            <h6 class="mb-2 text-dark">${quiz.question}</h6>
+                            <div class="d-flex align-items-center text-muted small">
+                                <i class="fas fa-clock me-1"></i>
+                                <span class="me-3">创建时间: ${formattedDate}</span>
+                                <i class="fas fa-stopwatch me-1"></i>
+                                <span>时间限制: ${quiz.time_limit || 30}秒</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 题目选项 -->
+                <div class="quiz-options p-3 bg-white">
+                    <h6 class="mb-3"><i class="fas fa-list me-2"></i>题目选项</h6>
+                    <div class="row">
+        `;
+
+        ['A', 'B', 'C', 'D'].forEach(option => {
+            const isCorrect = quiz.correct_answer === option;
+            const count = quiz.option_distribution[option] || 0;
+            const percentage = quiz.total_responses > 0 ? (count / quiz.total_responses * 100).toFixed(1) : 0;
+            const optionText = options[option];
+            const isUndefined = optionText.includes('未设置');
+            
+            html += `
+                <div class="col-md-6 mb-2">
+                    <div class="option-card p-3 border rounded ${isCorrect ? 'border-success bg-success bg-opacity-10' : 'border-light'} ${isUndefined ? 'border-warning bg-warning bg-opacity-10' : ''}">
+                        <div class="d-flex align-items-start">
+                            <div class="option-label me-3">
+                                <span class="badge ${isCorrect ? 'bg-success' : isUndefined ? 'bg-warning' : 'bg-secondary'} fs-6">
+                                    ${option} ${isCorrect ? '✓' : ''}
+                                </span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="option-text mb-2 ${isUndefined ? 'text-warning fst-italic' : ''}">${optionText}</div>
+                                <div class="option-stats">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small class="text-muted">${count} 人选择 (${percentage}%)</small>
+                                        <small class="text-muted">${percentage}%</small>
+                                    </div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar ${isCorrect ? 'bg-success' : 'bg-secondary'}" 
+                                             style="width: ${percentage}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+                    </div>
+                </div>
+
+                <!-- 统计数据 -->
+                <div class="quiz-stats p-3 bg-light border-top">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="h5 mb-1 text-primary">${quiz.total_responses}</div>
+                                <small class="text-muted">总回答数</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="h5 mb-1 text-success">${quiz.correct_responses}</div>
+                                <small class="text-muted">答对人数</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="h5 mb-1 text-warning">${accuracy}%</div>
+                                <small class="text-muted">正确率</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="h5 mb-1 text-info">${quiz.correct_answer}</div>
+                                <small class="text-muted">正确答案</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        `;
+
+        // 如果有解释，显示解释
+        if (quiz.explanation && quiz.explanation.trim()) {
+            html += `
+                <div class="quiz-explanation p-3 border-top bg-info bg-opacity-10">
+                    <h6 class="mb-2"><i class="fas fa-lightbulb me-2 text-warning"></i>题目解释</h6>
+                    <p class="mb-0 text-dark">${quiz.explanation}</p>
+                </div>
+            `;
         }
-    } catch (error) {
-        console.error('登出失败:', error);
-    }
-}
 
-// 显示消息提示
-function showMessage(message, type) {
-    const toast = document.getElementById('messageToast');
-    const toastMessage = document.getElementById('toastMessage');
-    
-    toastMessage.textContent = message;
-    
-    // 设置不同类型的样式
-    toast.className = 'toast';
-    if (type === 'success') {
-        toast.classList.add('bg-success', 'text-white');
-    } else {
-        toast.classList.add('bg-danger', 'text-white');
-    }
-    
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
+        // 如果题目未激活，显示提示
+        if (!quiz.is_active) {
+            html += `
+                <div class="quiz-inactive-notice p-3 border-top bg-secondary bg-opacity-10">
+                    <h6 class="mb-2"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>题目状态</h6>
+                    <p class="mb-0 text-muted">此题目尚未激活，听众无法看到和回答。需要演讲者在演讲者界面中发送此题目给听众。</p>
+                </div>
+            `;
+        }
+
+        html += `</div>`;
+    });
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
 }

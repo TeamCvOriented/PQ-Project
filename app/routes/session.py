@@ -328,3 +328,60 @@ def update_session(session_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'更新失败: {str(e)}'}), 500
+
+@session_bp.route('/my-sessions', methods=['GET'])
+@require_auth
+def get_my_sessions():
+    """获取用户当前参与的会话"""
+    user_id = session['user_id']
+    user_role = session.get('user_role')
+    
+    if user_role == 'listener':
+        # 听众获取已参与的会话
+        participants = SessionParticipant.query.filter_by(user_id=user_id).all()
+        session_list = []
+        
+        for participant in participants:
+            pq_session = participant.session
+            session_list.append({
+                'id': pq_session.id,
+                'title': pq_session.title,
+                'description': pq_session.description,
+                'organizer': pq_session.organizer.username,
+                'speaker': pq_session.speaker.username,
+                'is_active': pq_session.is_active,
+                'joined_at': participant.joined_at.isoformat(),
+                'participant_count': len(pq_session.participants)
+            })
+        
+        return jsonify({
+            'sessions': session_list,
+            'total': len(session_list)
+        })
+    
+    elif user_role == 'speaker':
+        # 演讲者获取分配的会话
+        sessions = PQSession.query.filter_by(speaker_id=user_id).all()
+    elif user_role == 'organizer':
+        # 组织者获取创建的会话
+        sessions = PQSession.query.filter_by(organizer_id=user_id).all()
+    else:
+        return jsonify({'error': '无效的用户角色'}), 400
+    
+    session_list = []
+    for s in sessions:
+        session_list.append({
+            'id': s.id,
+            'title': s.title,
+            'description': s.description,
+            'organizer': s.organizer.username,
+            'speaker': s.speaker.username,
+            'is_active': s.is_active,
+            'created_at': s.created_at.isoformat(),
+            'participant_count': len(s.participants)
+        })
+    
+    return jsonify({
+        'sessions': session_list,
+        'total': len(session_list)
+    })

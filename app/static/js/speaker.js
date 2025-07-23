@@ -30,6 +30,16 @@ document.addEventListener('DOMContentLoaded', function() {
             loadQuizzes(this.value);
         }
     });
+    
+    // 统计页面会话选择事件
+    document.getElementById('statsSessionSelect').addEventListener('change', function() {
+        if (this.value) {
+            loadSessionStatistics(this.value);
+        } else {
+            const container = document.getElementById('statisticsContent');
+            container.innerHTML = '<p class="text-muted text-center">请选择会话查看统计数据</p>';
+        }
+    });
 });
 
 // 检查用户认证状态
@@ -758,4 +768,231 @@ function previewQuiz(quizIndex) {
             quizCard.style.transform = 'scale(1)';
         }, 300);
     }
+}
+
+// 加载答题统计
+async function loadStatistics() {
+    try {
+        // 加载会话列表到统计页面的下拉框
+        const response = await fetch('/api/session/list');
+        if (response.ok) {
+            const data = await response.json();
+            updateStatsSessionSelect(data.sessions);
+        }
+        
+        // 清空统计内容
+        const container = document.getElementById('statisticsContent');
+        container.innerHTML = '<p class="text-muted text-center">请选择会话查看统计数据</p>';
+        
+    } catch (error) {
+        console.error('加载统计失败:', error);
+        showMessage('加载统计失败', 'error');
+    }
+}
+
+// 更新统计页面的会话选择下拉框
+function updateStatsSessionSelect(sessions) {
+    const select = document.getElementById('statsSessionSelect');
+    if (select) {
+        select.innerHTML = '<option value="">选择会话</option>';
+        sessions.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.id;
+            option.textContent = session.title;
+            select.appendChild(option);
+        });
+        
+        // 添加会话选择事件监听器
+        select.addEventListener('change', function() {
+            if (this.value) {
+                loadSessionStatistics(this.value);
+            } else {
+                const container = document.getElementById('statisticsContent');
+                container.innerHTML = '<p class="text-muted text-center">请选择会话查看统计数据</p>';
+            }
+        });
+    }
+}
+
+// 加载指定会话的统计数据
+async function loadSessionStatistics(sessionId) {
+    const container = document.getElementById('statisticsContent');
+    
+    try {
+        // 显示加载状态
+        container.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载统计数据...</p>
+            </div>
+        `;
+        
+        const response = await fetch(`/api/quiz/statistics/${sessionId}`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayStatistics(data);
+        } else {
+            const error = await response.json();
+            container.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${error.error || '加载统计数据失败'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('加载会话统计失败:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle me-2"></i>
+                网络错误，请稍后重试
+            </div>
+        `;
+    }
+}
+
+// 显示统计数据
+function displayStatistics(data) {
+    const container = document.getElementById('statisticsContent');
+    
+    if (!data.quiz_statistics || data.quiz_statistics.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                该会话暂无题目数据
+            </div>
+        `;
+        return;
+    }
+    
+    // 计算总体统计
+    const totalQuizzes = data.quiz_statistics.length;
+    const totalResponses = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.total_responses, 0);
+    const totalCorrect = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.correct_responses, 0);
+    const overallAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses * 100).toFixed(1) : 0;
+    
+    container.innerHTML = `
+        <!-- 总体统计卡片 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-question-circle fa-2x mb-2"></i>
+                        <h4>${totalQuizzes}</h4>
+                        <small>总题目数</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-users fa-2x mb-2"></i>
+                        <h4>${totalResponses}</h4>
+                        <small>总回答数</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-check-circle fa-2x mb-2"></i>
+                        <h4>${totalCorrect}</h4>
+                        <small>正确回答数</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-percentage fa-2x mb-2"></i>
+                        <h4>${overallAccuracy}%</h4>
+                        <small>总体正确率</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 详细题目统计 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>题目详细统计
+                </h5>
+            </div>
+            <div class="card-body">
+                ${data.quiz_statistics.map((quiz, index) => `
+                    <div class="card mb-3 ${quiz.is_active ? 'border-success' : 'border-secondary'}">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                题目 ${index + 1}
+                                ${quiz.is_active ? '<span class="badge bg-success ms-2">进行中</span>' : '<span class="badge bg-secondary ms-2">已结束</span>'}
+                            </h6>
+                            <small class="text-muted">创建时间: ${new Date(quiz.created_at).toLocaleString()}</small>
+                        </div>
+                        <div class="card-body">
+                            <h6 class="mb-3">${quiz.question}</h6>
+                            
+                            <!-- 统计数据 -->
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-primary">${quiz.total_responses}</h5>
+                                        <small class="text-muted">回答人数</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-success">${quiz.correct_responses}</h5>
+                                        <small class="text-muted">答对人数</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-warning">${quiz.accuracy_rate.toFixed(1)}%</h5>
+                                        <small class="text-muted">正确率</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-info">${quiz.correct_answer}</h5>
+                                        <small class="text-muted">正确答案</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 选项分布 -->
+                            <div class="mb-3">
+                                <h6>选项分布:</h6>
+                                <div class="row">
+                                    ${['A', 'B', 'C', 'D'].map(option => {
+                                        const count = quiz.option_distribution[option] || 0;
+                                        const percentage = quiz.total_responses > 0 ? (count / quiz.total_responses * 100).toFixed(1) : 0;
+                                        const isCorrect = quiz.correct_answer === option;
+                                        return `
+                                            <div class="col-md-3">
+                                                <div class="d-flex align-items-center mb-2">
+                                                    <span class="option-badge ${isCorrect ? 'bg-success' : 'bg-secondary'} me-2">${option}</span>
+                                                    <div class="flex-grow-1">
+                                                        <div class="progress" style="height: 20px;">
+                                                            <div class="progress-bar ${isCorrect ? 'bg-success' : 'bg-secondary'}" 
+                                                                 style="width: ${percentage}%">
+                                                                ${count}人 (${percentage}%)
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
 }

@@ -40,6 +40,98 @@
         .session-card:hover {
             transform: translateY(-2px);
         }
+        
+        .quiz-stat-item {
+            transition: all 0.3s ease;
+        }
+        
+        .quiz-stat-item:hover {
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .quiz-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        
+        .option-card {
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+        
+        .option-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .option-label .badge {
+            font-size: 0.9em;
+            padding: 0.5em 0.8em;
+        }
+        
+        .stat-item {
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-item:hover {
+            background-color: rgba(0,0,0,0.05);
+        }
+        
+        .quiz-explanation {
+            border-left: 4px solid #ffc107;
+        }
+        
+        .progress {
+            transition: all 0.3s ease;
+        }
+        
+        .card {
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .option-text {
+            font-weight: 500;
+            color: #495057;
+            line-height: 1.4;
+        }
+        
+        .quiz-stats {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        
+        .stat-box {
+            transition: all 0.3s ease;
+        }
+        
+        .stat-box:hover {
+            background-color: #e9ecef !important;
+        }
+        
+        .option-stat {
+            transition: all 0.3s ease;
+        }
+        
+        .option-stat:hover {
+            transform: scale(1.05);
+        }
+        
+        .progress {
+            transition: all 0.3s ease;
+        }
+        
+        .card {
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
     </style>
 </head>
 <body>
@@ -178,12 +270,20 @@
                 
                 <!-- 统计分析 -->
                 <div id="statistics" class="content-section">
-                    <h2 class="mb-4">统计分析</h2>
-                    <select id="sessionSelect" class="form-select mb-3" onchange="loadSessionStats(this.value)">
-                        <option value="">选择会话</option>
-                        <!-- JS动态填充 -->
-                    </select>
-                    <div id="quizStats"></div>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>统计分析</h2>
+                        <div>
+                            <select class="form-select d-inline-block me-3" id="sessionSelect" style="width: auto;">
+                                <option value="">选择会话</option>
+                            </select>
+                            <button class="btn btn-outline-primary" onclick="loadStatistics()">
+                                <i class="fas fa-sync me-2"></i>刷新数据
+                            </button>
+                        </div>
+                    </div>
+                    <div id="statisticsContent">
+                        <!-- 统计内容将在这里显示 -->
+                    </div>
                 </div>
             </div>
         </div>

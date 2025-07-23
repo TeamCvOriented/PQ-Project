@@ -169,6 +169,7 @@ def submit_answer():
     
     quiz_id = data['quiz_id']
     answer = data['answer'].upper()
+    user_id = session['user_id']
     
     if answer not in ['A', 'B', 'C', 'D']:
         return jsonify({'error': '答案格式错误'}), 400
@@ -178,7 +179,6 @@ def submit_answer():
         return jsonify({'error': '题目不存在'}), 404
     
     # 检查用户是否已经回答过这道题
-    user_id = session['user_id']
     existing_response = QuizResponse.query.filter_by(
         quiz_id=quiz_id,
         user_id=user_id
@@ -263,84 +263,9 @@ def get_current_quiz(session_id):
             'error': f'获取题目失败: {str(e)}'
         }), 500
 
-@quiz_bp.route('/session-sequence/<int:session_id>', methods=['GET'])
-def get_session_quiz_sequence(session_id):
-    """获取会话的题目序列（按创建时间排序）"""
-    try:
-        # 获取会话的所有题目，按创建时间排序
-        quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
-        
-        if not quizzes:
-            return jsonify({
-                'success': False,
-                'message': '该会话没有题目'
-            })
-        
-        # 如果用户已登录，检查每个题目的回答状态
-        user_answered_quizzes = set()
-        if 'user_id' in session:
-            user_id = session['user_id']
-            responses = QuizResponse.query.filter_by(user_id=user_id).all()
-            user_answered_quizzes = {r.quiz_id for r in responses}
-        
-        quiz_sequence = []
-        for i, quiz in enumerate(quizzes):
-            quiz_sequence.append({
-                'id': quiz.id,
-                'question': quiz.question,
-                'option_a': quiz.option_a,
-                'option_b': quiz.option_b,
-                'option_c': quiz.option_c,
-                'option_d': quiz.option_d,
-                'time_limit': quiz.time_limit,
-                'is_active': quiz.is_active,
-                'has_answered': quiz.id in user_answered_quizzes,
-                'order_index': i,  # 题目顺序索引
-                'created_at': quiz.created_at.isoformat()
-            })
-        
-        return jsonify({
-            'success': True,
-            'quiz_sequence': quiz_sequence,
-            'total_count': len(quiz_sequence)
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'获取题目序列失败: {str(e)}'
-        }), 500
-    
-    # 检查是否已经回答过
-    existing_response = QuizResponse.query.filter_by(quiz_id=quiz_id, user_id=user_id).first()
-    if existing_response:
-        return jsonify({'error': '您已经回答过该题目'}), 400
-    
-    try:
-        # 判断答案是否正确
-        is_correct = (answer == quiz.correct_answer)
-        
-        # 保存回答
-        response = QuizResponse(
-            quiz_id=quiz_id,
-            user_id=user_id,
-            answer=answer,
-            is_correct=is_correct
-        )
-        
-        db.session.add(response)
-        db.session.commit()
-        
-        return jsonify({
-            'message': '答案提交成功',
-            'is_correct': is_correct,
-            'correct_answer': quiz.correct_answer,
-            'explanation': quiz.explanation
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'提交答案失败: {str(e)}'}), 500
+
+
+
 
 @quiz_bp.route('/statistics/<int:session_id>', methods=['GET'])
 @require_auth
@@ -369,13 +294,19 @@ def get_quiz_statistics(session_id):
         quiz_stats.append({
             'id': quiz.id,
             'question': quiz.question,
+            'option_a': quiz.option_a,
+            'option_b': quiz.option_b,
+            'option_c': quiz.option_c,
+            'option_d': quiz.option_d,
             'correct_answer': quiz.correct_answer,
             'total_responses': total_responses,
             'correct_responses': correct_responses,
             'accuracy_rate': (correct_responses / total_responses * 100) if total_responses > 0 else 0,
             'option_distribution': option_stats,
             'is_active': quiz.is_active,
-            'created_at': quiz.created_at.isoformat()
+            'created_at': quiz.created_at.isoformat(),
+            'explanation': quiz.explanation,
+            'time_limit': quiz.time_limit
         })
     
     return jsonify({
@@ -390,6 +321,9 @@ def get_user_quiz_stats(session_id):
     """获取用户在该会话中的答题统计"""
     user_id = session['user_id']
     
+    # 获取会话的所有题目
+    total_quizzes = Quiz.query.filter_by(session_id=session_id).count()
+    
     # 获取用户在该会话中的所有回答
     user_responses = db.session.query(QuizResponse).join(Quiz).filter(
         Quiz.session_id == session_id,
@@ -398,6 +332,7 @@ def get_user_quiz_stats(session_id):
     
     total_answered = len(user_responses)
     correct_answered = sum(1 for r in user_responses if r.is_correct)
+    accuracy = (correct_answered / total_answered * 100) if total_answered > 0 else 0
     
     # 计算排名
     all_user_stats = db.session.query(
@@ -406,22 +341,100 @@ def get_user_quiz_stats(session_id):
         db.func.sum(db.case([(QuizResponse.is_correct == True, 1)], else_=0)).label('correct')
     ).join(Quiz).filter(Quiz.session_id == session_id).group_by(QuizResponse.user_id).all()
     
-    # 按正确率排序
+    # 按正确率排序，然后按答题数量排序
     sorted_stats = sorted(all_user_stats, 
-                         key=lambda x: (x.correct / x.total if x.total > 0 else 0), 
+                         key=lambda x: (x.correct / x.total if x.total > 0 else 0, x.total), 
                          reverse=True)
     
     user_rank = next((i + 1 for i, stat in enumerate(sorted_stats) if stat.user_id == user_id), None)
     
+    # 构建排行榜数据
+    ranking = []
+    for i, stat in enumerate(sorted_stats):
+        user_accuracy = (stat.correct / stat.total * 100) if stat.total > 0 else 0
+        ranking.append({
+            'user_id': stat.user_id,
+            'total': stat.total,
+            'correct': stat.correct,
+            'accuracy': round(user_accuracy, 1),
+            'is_current_user': stat.user_id == user_id
+        })
+    
     return jsonify({
         'user_id': user_id,
         'session_id': session_id,
+        'total_quizzes': total_quizzes,
         'total_answered': total_answered,
         'correct_answered': correct_answered,
-        'accuracy_rate': (correct_answered / total_answered * 100) if total_answered > 0 else 0,
+        'accuracy': round(accuracy, 1),
         'rank': user_rank,
-        'total_participants': len(sorted_stats)
+        'total_participants': len(sorted_stats),
+        'ranking': ranking
     })
+
+@quiz_bp.route('/session-sequence/<int:session_id>', methods=['GET'])
+@require_auth
+def get_session_quiz_sequence(session_id):
+    """获取会话的题目序列（按创建时间排序）"""
+    try:
+        # 获取会话的所有题目，按创建时间排序
+        quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
+        
+        if not quizzes:
+            return jsonify({
+                'success': False,
+                'message': '该会话没有题目'
+            })
+        
+        # 如果用户已登录，检查每个题目的回答状态
+        user_responses = {}
+        if 'user_id' in session:
+            user_id = session['user_id']
+            responses = QuizResponse.query.filter_by(user_id=user_id).all()
+            user_responses = {r.quiz_id: r for r in responses}
+        
+        quiz_sequence = []
+        for i, quiz in enumerate(quizzes):
+            user_response = user_responses.get(quiz.id)
+            quiz_data = {
+                'id': quiz.id,
+                'question': quiz.question,
+                'option_a': quiz.option_a,
+                'option_b': quiz.option_b,
+                'option_c': quiz.option_c,
+                'option_d': quiz.option_d,
+                'correct_answer': quiz.correct_answer,
+                'explanation': quiz.explanation,
+                'time_limit': quiz.time_limit,
+                'is_active': quiz.is_active,
+                'order_index': i,  # 题目顺序索引
+                'created_at': quiz.created_at.isoformat()
+            }
+            
+            # 添加用户回答信息
+            if user_response:
+                quiz_data['user_response'] = {
+                    'answer': user_response.answer,
+                    'is_correct': user_response.is_correct,
+                    'answered_at': user_response.created_at.isoformat()
+                }
+            
+            quiz_sequence.append(quiz_data)
+        
+        return jsonify({
+            'success': True,
+            'quizzes': quiz_sequence,
+            'total_count': len(quiz_sequence)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'获取题目序列失败: {str(e)}'
+        }), 500
+
+
+
 
 @quiz_bp.route('/feedback', methods=['POST'])
 @require_auth
