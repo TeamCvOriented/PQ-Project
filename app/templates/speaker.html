@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>演讲者界面 - PQ-Project</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            background: #28a745;
+            min-height: 100vh;
+            color: white;
+        }
+        .sidebar .nav-link {
+            color: #c3e6cb;
+            transition: all 0.3s;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            color: white;
+            background-color: #34ce57;
+        }
+        .content-section {
+            display: none;
+        }
+        .content-section.active {
+            display: block;
+        }
+        .upload-area {
+            border: 3px dashed #28a745;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            background-color: #f8f9fa;
+            border-color: #20c997;
+        }
+        .upload-area.drag-over {
+            background-color: #e9f7ef;
+            border-color: #28a745;
+        }
+        #aiUploadArea {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            background-color: #f8f9fa;
+        }
+        #aiUploadArea:hover {
+            background-color: #e3f2fd;
+            border-color: #0056b3;
+        }
+        .quiz-card {
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .quiz-active {
+            border-left: 5px solid #28a745;
+        }
+        
+        .option-badge {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <div class="col-md-3 col-lg-2 sidebar p-3">
+                <div class="text-center mb-4">
+                    <i class="fas fa-microphone fa-2x mb-2"></i>
+                    <h5>演讲者控制台</h5>
+                    <!-- <small class="text-muted" id="userInfo">加载中...</small> -->
+                </div>
+                
+                <ul class="nav nav-pills flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" data-section="sessions">
+                            <i class="fas fa-calendar me-2"></i>我的会话
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="quizzes">
+                            <i class="fas fa-question-circle me-2"></i>题目管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="statistics">
+                            <i class="fas fa-chart-line me-2"></i>答题统计
+                        </a>
+                    </li>
+                    <li class="nav-item mt-auto">
+                        <a class="nav-link text-danger" href="#" onclick="logout()">
+                            <i class="fas fa-sign-out-alt me-2"></i>退出
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- 主内容区 -->
+            <div class="col-md-9 col-lg-10 p-4">
+                <!-- 我的会话 -->
+                <div id="sessions" class="content-section active">
+                    <h2 class="mb-4">我的演讲会话</h2>
+                    <div id="sessionsList">
+                        <!-- 会话列表将在这里动态加载 -->
+                    </div>
+                </div>
+                
+                <!-- 上传内容 -->
+                <!-- 题目管理 -->
+                <div id="quizzes" class="content-section">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>题目管理</h2>
+                        <div>
+                            <select class="form-select d-inline-block me-3" id="quizSessionSelect" style="width: auto;">
+                                <option value="">选择会话</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- 文件上传和AI出题 -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">上传文件并生成题目</h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- 文件上传区域 -->
+                            <div class="upload-area mb-3" id="aiUploadArea">
+                                <i class="fas fa-cloud-upload-alt fa-2x text-primary mb-2"></i>
+                                <h6>上传演讲文件</h6>
+                                <p class="text-muted small">支持 PDF 和 PPT 文件</p>
+                                <input type="file" id="aiFileInput" accept=".pdf,.ppt,.pptx" style="display: none;">
+                                <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('aiFileInput').click()">
+                                    <i class="fas fa-folder-open me-2"></i>选择文件
+                                </button>
+                            </div>
+                            
+                            <!-- 上传文件信息显示 -->
+                            <div id="uploadedFileInfo" class="mb-3" style="display: none;">
+                                <div class="alert alert-info d-flex align-items-center">
+                                    <i class="fas fa-file me-2"></i>
+                                    <span id="fileName"></span>
+                                    <button class="btn btn-sm btn-outline-danger ms-auto" onclick="clearUploadedFile()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- AI出题按钮 -->
+                            <div class="text-center">
+                                <button class="btn btn-success" id="aiGenerateBtn" onclick="generateAIQuizzes()" disabled>
+                                    <i class="fas fa-magic me-2"></i>AI出题（生成5道选择题）
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 题目列表 -->
+                    <div id="quizzesList">
+                        <!-- 题目列表将在这里显示 -->
+                    </div>
+                </div>
+                
+                <!-- 答题统计 -->
+                <div id="statistics" class="content-section">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>答题统计</h2>
+                        <div>
+                            <select class="form-select d-inline-block me-3" id="statsSessionSelect" style="width: auto;">
+                                <option value="">选择会话</option>
+                            </select>
+                            <button class="btn btn-outline-primary" onclick="loadStatistics()">
+                                <i class="fas fa-sync me-2"></i>刷新数据
+                            </button>
+                        </div>
+                    </div>
+                    <div id="statisticsContent">
+                        <!-- 统计内容将在这里显示 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="messageToast" class="toast" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">系统消息</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/speaker.js"></script>
+</body>
+</html>
