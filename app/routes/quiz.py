@@ -941,3 +941,66 @@ def test_file_upload():
             'error': f'测试失败: {str(e)}',
             'step': 'general_error'
         }), 500
+
+@quiz_bp.route('/<int:quiz_id>/discussions', methods=['GET'])
+@require_auth
+def get_discussions(quiz_id):
+    """获取题目的讨论消息"""
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        return jsonify({'error': '题目不存在'}), 404
+    if quiz.is_active:
+        return jsonify({'error': '讨论区尚未开启'}), 403
+    
+    discussions = QuizDiscussion.query.filter_by(quiz_id=quiz_id).order_by(QuizDiscussion.created_at.asc()).all()
+    discussion_list = [{
+        'id': d.id,
+        'user_id': d.user_id,
+        'message': d.message,
+        'created_at': d.created_at.isoformat()
+    } for d in discussions]
+    
+    # 获取统计数据
+    responses = QuizResponse.query.filter_by(quiz_id=quiz_id).all()
+    total = len(responses)
+    option_stats = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
+    for r in responses:
+        option_stats[r.answer] += 1
+    
+    return jsonify({
+        'discussions': discussion_list,
+        'statistics': {
+            'total_responses': total,
+            'option_distribution': option_stats
+        }
+    })
+
+@quiz_bp.route('/<int:quiz_id>/discussions', methods=['POST'])
+@require_auth
+def post_discussion(quiz_id):
+    """发布讨论消息"""
+    data = request.get_json()
+    if not data or not data.get('message'):
+        return jsonify({'error': '缺少消息内容'}), 400
+    
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        return jsonify({'error': '题目不存在'}), 404
+    if quiz.is_active:
+        return jsonify({'error': '讨论区尚未开启'}), 403
+    
+    discussion = QuizDiscussion(
+        quiz_id=quiz_id,
+        user_id=session['user_id'],
+        message=data['message']
+    )
+    db.session.add(discussion)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': '评论已发布'})
+
+@quiz_bp.route('/finished', methods=['GET'])
+@require_auth
+def get_finished_quizzes():
+    quizzes = Quiz.query.filter_by(is_active=False).all()  # 简化，实际应过滤用户参与的会话
+    return jsonify({'quizzes': [{'id': q.id, 'question': q.question} for q in quizzes]})
