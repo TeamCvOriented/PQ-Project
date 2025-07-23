@@ -1,6 +1,7 @@
 from app import db
 from datetime import datetime
 from enum import Enum
+from werkzeug.security import generate_password_hash, check_password_hash
 
 class UserRole(Enum):
     ORGANIZER = "organizer"
@@ -22,6 +23,14 @@ class User(db.Model):
     organized_sessions = db.relationship('Session', foreign_keys='Session.organizer_id', backref='organizer')
     speaker_sessions = db.relationship('Session', foreign_keys='Session.speaker_id', backref='speaker')
     responses = db.relationship('QuizResponse', backref='user')
+    
+    def set_password(self, password):
+        """设置密码哈希"""
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """检查密码"""
+        return check_password_hash(self.password_hash, password)
 
 class Session(db.Model):
     __tablename__ = 'sessions'
@@ -113,3 +122,17 @@ class Feedback(db.Model):
     feedback_type = db.Column(db.String(50), nullable=False)  # too_fast, too_slow, boring, bad_question
     content = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class UserQuizProgress(db.Model):
+    """追踪每个用户在每个会话中的答题进度"""
+    __tablename__ = 'user_quiz_progress'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=False)
+    current_quiz_index = db.Column(db.Integer, default=0)  # 当前应该答的题目索引（从0开始）
+    is_completed = db.Column(db.Boolean, default=False)  # 是否已完成所有题目
+    last_activity = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # 建立唯一约束：每个用户在每个会话中只能有一条进度记录
+    __table_args__ = (db.UniqueConstraint('user_id', 'session_id'),)

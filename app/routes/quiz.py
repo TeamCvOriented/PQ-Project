@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session, current_app
 from app import db
-from app.models import Quiz, QuizResponse, QuizDiscussion, Content, Session as PQSession, Feedback
+from app.models import Quiz, QuizResponse, QuizDiscussion, Content, Session as PQSession, Feedback, UserQuizProgress, User
 from app.routes.auth import require_auth
 from datetime import datetime
 
@@ -185,7 +185,19 @@ def submit_answer():
     ).first()
     
     if existing_response:
-        return jsonify({'error': '您已经回答过这道题'}), 400
+        # 返回已回答的结果信息，而不是简单的错误
+        return jsonify({
+            'error': '您已经回答过这道题',
+            'already_answered': True,
+            'quiz': {
+                'id': quiz.id,
+                'question': quiz.question,
+                'explanation': quiz.explanation
+            },
+            'user_answer': existing_response.answer,
+            'correct_answer': quiz.correct_answer,
+            'is_correct': existing_response.is_correct
+        }), 200  # 改为200状态码，但包含already_answered标志
     
     # 检查答案是否正确
     is_correct = answer == quiz.correct_answer.upper()
@@ -202,13 +214,70 @@ def submit_answer():
         db.session.add(response)
         db.session.commit()
         
-        return jsonify({
+        # 更新用户进度
+        user_progress = UserQuizProgress.query.filter_by(
+            user_id=user_id,
+            session_id=quiz.session_id
+        ).first()
+        
+        if not user_progress:
+            # 如果没有进度记录，创建一个
+            user_progress = UserQuizProgress(
+                user_id=user_id,
+                session_id=quiz.session_id,
+                current_quiz_index=0,
+                is_completed=False
+            )
+            db.session.add(user_progress)
+        
+        # 获取该会话的所有题目，按创建时间排序
+        all_quizzes = Quiz.query.filter_by(session_id=quiz.session_id).order_by(Quiz.created_at.asc()).all()
+        
+        # 找到当前题目的位置
+        current_index = -1
+        for i, q in enumerate(all_quizzes):
+            if q.id == quiz_id:
+                current_index = i
+                break
+        
+        # 更新用户进度
+        if current_index >= 0:
+            if current_index < len(all_quizzes) - 1:
+                # 还有下一题，推进进度
+                user_progress.current_quiz_index = current_index + 1
+                user_progress.last_activity = datetime.utcnow()
+                next_quiz_activated = True
+            else:
+                # 这是最后一题，标记为完成
+                user_progress.is_completed = True
+                user_progress.last_activity = datetime.utcnow()
+                next_quiz_activated = False
+        
+        db.session.commit()
+        
+        result = {
             'success': True,
             'is_correct': is_correct,
             'correct_answer': quiz.correct_answer,
             'explanation': quiz.explanation,
-            'user_answer': answer
-        })
+            'user_answer': answer,
+            'quiz': {
+                'id': quiz.id,
+                'question': quiz.question,
+                'explanation': quiz.explanation
+            }
+        }
+        
+        # 如果有下一题，添加相关信息
+        if next_quiz_activated:
+            result['next_quiz_activated'] = True
+            result['message'] = '答案已提交，准备下一题'
+        else:
+            # 这是最后一题，所有题目已完成
+            result['all_quizzes_completed'] = True
+            result['message'] = '恭喜！您已完成所有题目'
+        
+        return jsonify(result)
         
     except Exception as e:
         db.session.rollback()
@@ -216,40 +285,104 @@ def submit_answer():
 
 @quiz_bp.route('/current/<int:session_id>', methods=['GET'])
 def get_current_quiz(session_id):
-    """获取会话的当前活跃题目"""
+    """获取用户在会话中的当前题目（基于个人进度）"""
     try:
-        # 获取会话的最新活跃题目
-        quiz = Quiz.query.filter_by(
-            session_id=session_id,
-            is_active=True
-        ).order_by(Quiz.created_at.desc()).first()
-        
-        if not quiz:
+        # 检查用户是否已登录
+        if 'user_id' not in session:
             return jsonify({
                 'success': False,
-                'message': '当前没有活跃的题目'
+                'message': '请先登录'
+            }), 401
+        
+        user_id = session['user_id']
+        
+        # 获取会话的所有题目，按创建时间排序
+        all_quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
+        
+        if not all_quizzes:
+            return jsonify({
+                'success': False,
+                'message': '该会话暂无题目'
             })
         
-        # 如果用户已登录，检查是否已经回答过
-        has_answered = False
-        if 'user_id' in session:
-            user_id = session['user_id']
-            existing_response = QuizResponse.query.filter_by(
-                quiz_id=quiz.id,
-                user_id=user_id
-            ).first()
-            has_answered = existing_response is not None
+        # 获取或创建用户在该会话的进度记录
+        user_progress = UserQuizProgress.query.filter_by(
+            user_id=user_id,
+            session_id=session_id
+        ).first()
         
+        if not user_progress:
+            # 新用户，创建进度记录，从第一题开始
+            user_progress = UserQuizProgress(
+                user_id=user_id,
+                session_id=session_id,
+                current_quiz_index=0,
+                is_completed=False
+            )
+            db.session.add(user_progress)
+            db.session.commit()
+        
+        # 检查用户是否已完成所有题目
+        if user_progress.is_completed:
+            return jsonify({
+                'success': False,
+                'message': '您已完成该会话的所有题目',
+                'completed': True
+            })
+        
+        # 检查当前题目索引是否有效
+        if user_progress.current_quiz_index >= len(all_quizzes):
+            # 标记为已完成
+            user_progress.is_completed = True
+            db.session.commit()
+            return jsonify({
+                'success': False,
+                'message': '您已完成该会话的所有题目',
+                'completed': True
+            })
+        
+        # 获取当前应该答的题目
+        current_quiz = all_quizzes[user_progress.current_quiz_index]
+        
+        # 检查是否已经回答过这道题
+        existing_response = QuizResponse.query.filter_by(
+            quiz_id=current_quiz.id,
+            user_id=user_id
+        ).first()
+        
+        has_answered = existing_response is not None
+        
+        # 如果已经回答过，自动推进到下一题
+        if has_answered and user_progress.current_quiz_index < len(all_quizzes) - 1:
+            user_progress.current_quiz_index += 1
+            user_progress.last_activity = datetime.utcnow()
+            db.session.commit()
+            
+            # 递归调用获取下一题
+            return get_current_quiz(session_id)
+        elif has_answered and user_progress.current_quiz_index == len(all_quizzes) - 1:
+            # 最后一题也答完了
+            user_progress.is_completed = True
+            db.session.commit()
+            return jsonify({
+                'success': False,
+                'message': '您已完成该会话的所有题目',
+                'completed': True
+            })
+        
+        # 返回当前题目
         quiz_data = {
-            'id': quiz.id,
-            'question': quiz.question,
-            'option_a': quiz.option_a,
-            'option_b': quiz.option_b,
-            'option_c': quiz.option_c,
-            'option_d': quiz.option_d,
-            'time_limit': quiz.time_limit,
-            'created_at': quiz.created_at.isoformat(),
-            'has_answered': has_answered
+            'id': current_quiz.id,
+            'question': current_quiz.question,
+            'option_a': current_quiz.option_a,
+            'option_b': current_quiz.option_b,
+            'option_c': current_quiz.option_c,
+            'option_d': current_quiz.option_d,
+            'time_limit': current_quiz.time_limit,
+            'created_at': current_quiz.created_at.isoformat(),
+            'has_answered': has_answered,
+            'quiz_number': user_progress.current_quiz_index + 1,
+            'total_quizzes': len(all_quizzes)
         }
         
         return jsonify({
@@ -319,6 +452,8 @@ def get_quiz_statistics(session_id):
 @require_auth
 def get_user_quiz_stats(session_id):
     """获取用户在该会话中的答题统计"""
+    from app.models import User
+    
     user_id = session['user_id']
     
     # 获取会话的所有题目
@@ -334,11 +469,11 @@ def get_user_quiz_stats(session_id):
     correct_answered = sum(1 for r in user_responses if r.is_correct)
     accuracy = (correct_answered / total_answered * 100) if total_answered > 0 else 0
     
-    # 计算排名
+    # 计算排名 - 获取所有用户的统计数据和用户信息
     all_user_stats = db.session.query(
         QuizResponse.user_id,
         db.func.count(QuizResponse.id).label('total'),
-        db.func.sum(db.case([(QuizResponse.is_correct == True, 1)], else_=0)).label('correct')
+        db.func.sum(db.case((QuizResponse.is_correct == True, 1), else_=0)).label('correct')
     ).join(Quiz).filter(Quiz.session_id == session_id).group_by(QuizResponse.user_id).all()
     
     # 按正确率排序，然后按答题数量排序
@@ -348,14 +483,17 @@ def get_user_quiz_stats(session_id):
     
     user_rank = next((i + 1 for i, stat in enumerate(sorted_stats) if stat.user_id == user_id), None)
     
-    # 构建排行榜数据
-    ranking = []
+    # 构建排行榜数据，包含用户信息
+    leaderboard = []
     for i, stat in enumerate(sorted_stats):
+        user_info = User.query.get(stat.user_id)
         user_accuracy = (stat.correct / stat.total * 100) if stat.total > 0 else 0
-        ranking.append({
+        leaderboard.append({
             'user_id': stat.user_id,
-            'total': stat.total,
-            'correct': stat.correct,
+            'username': user_info.username if user_info else f'User{stat.user_id}',
+            'nickname': user_info.nickname if user_info and hasattr(user_info, 'nickname') else None,
+            'total_answered': stat.total,
+            'correct_answered': stat.correct,
             'accuracy': round(user_accuracy, 1),
             'is_current_user': stat.user_id == user_id
         })
@@ -369,7 +507,7 @@ def get_user_quiz_stats(session_id):
         'accuracy': round(accuracy, 1),
         'rank': user_rank,
         'total_participants': len(sorted_stats),
-        'ranking': ranking
+        'leaderboard': leaderboard
     })
 
 @quiz_bp.route('/session-sequence/<int:session_id>', methods=['GET'])
@@ -390,10 +528,17 @@ def get_session_quiz_sequence(session_id):
         user_responses = {}
         if 'user_id' in session:
             user_id = session['user_id']
-            responses = QuizResponse.query.filter_by(user_id=user_id).all()
+            # 查询用户在该会话中的所有回答
+            responses = db.session.query(QuizResponse).join(Quiz).filter(
+                QuizResponse.user_id == user_id,
+                Quiz.session_id == session_id
+            ).all()
             user_responses = {r.quiz_id: r for r in responses}
         
         quiz_sequence = []
+        answered_count = 0
+        correct_count = 0
+        
         for i, quiz in enumerate(quizzes):
             user_response = user_responses.get(quiz.id)
             quiz_data = {
@@ -413,18 +558,35 @@ def get_session_quiz_sequence(session_id):
             
             # 添加用户回答信息
             if user_response:
+                answered_count += 1
+                if user_response.is_correct:
+                    correct_count += 1
                 quiz_data['user_response'] = {
                     'answer': user_response.answer,
                     'is_correct': user_response.is_correct,
-                    'answered_at': user_response.created_at.isoformat()
+                    'answered_at': user_response.response_time.isoformat()
                 }
+                quiz_data['has_answered'] = True
+                quiz_data['is_correct'] = user_response.is_correct
+                quiz_data['user_answer'] = user_response.answer
+            else:
+                quiz_data['has_answered'] = False
+                quiz_data['is_correct'] = False
+                quiz_data['user_answer'] = None
             
             quiz_sequence.append(quiz_data)
+        
+        # 计算正确率
+        accuracy = (correct_count / answered_count * 100) if answered_count > 0 else 0
         
         return jsonify({
             'success': True,
             'quizzes': quiz_sequence,
-            'total_count': len(quiz_sequence)
+            'total_count': len(quiz_sequence),
+            'total_quizzes': len(quiz_sequence),
+            'answered_count': answered_count,
+            'correct_count': correct_count,
+            'accuracy': accuracy
         })
         
     except Exception as e:
@@ -962,13 +1124,12 @@ def get_discussions(quiz_id):
     quiz = Quiz.query.get(quiz_id)
     if not quiz:
         return jsonify({'error': '题目不存在'}), 404
-    if quiz.is_active:
-        return jsonify({'error': '讨论区尚未开启'}), 403
     
     discussions = QuizDiscussion.query.filter_by(quiz_id=quiz_id).order_by(QuizDiscussion.created_at.asc()).all()
     discussion_list = [{
         'id': d.id,
         'user_id': d.user_id,
+        'username': User.query.get(d.user_id).username if User.query.get(d.user_id) else '未知用户',
         'message': d.message,
         'created_at': d.created_at.isoformat()
     } for d in discussions]
@@ -981,7 +1142,20 @@ def get_discussions(quiz_id):
         option_stats[r.answer] += 1
     
     return jsonify({
+        'success': True,
+        'quiz': {
+            'id': quiz.id,
+            'question': quiz.question,
+            'option_a': quiz.option_a,
+            'option_b': quiz.option_b,
+            'option_c': quiz.option_c,
+            'option_d': quiz.option_d,
+            'correct_answer': quiz.correct_answer,
+            'explanation': quiz.explanation,
+            'is_active': quiz.is_active
+        },
         'discussions': discussion_list,
+        'can_discuss': True,  # 所有题目都可以讨论
         'statistics': {
             'total_responses': total,
             'option_distribution': option_stats
@@ -999,21 +1173,143 @@ def post_discussion(quiz_id):
     quiz = Quiz.query.get(quiz_id)
     if not quiz:
         return jsonify({'error': '题目不存在'}), 404
-    if quiz.is_active:
-        return jsonify({'error': '讨论区尚未开启'}), 403
     
     discussion = QuizDiscussion(
         quiz_id=quiz_id,
         user_id=session['user_id'],
         message=data['message']
     )
+    
     db.session.add(discussion)
     db.session.commit()
     
-    return jsonify({'success': True, 'message': '评论已发布'})
+    # 返回新创建的讨论信息
+    user = User.query.get(session['user_id'])
+    return jsonify({
+        'success': True,
+        'message': '讨论发布成功',
+        'discussion': {
+            'id': discussion.id,
+            'user_id': discussion.user_id,
+            'username': user.username if user else '未知用户',
+            'message': discussion.message,
+            'created_at': discussion.created_at.isoformat()
+        }
+    })
+
+@quiz_bp.route('/session/<int:session_id>/discussions', methods=['GET'])
+@require_auth
+def get_session_discussions(session_id):
+    """获取会话中所有题目的讨论概览"""
+    quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
+    
+    quiz_list = []
+    for i, quiz in enumerate(quizzes):
+        # 获取讨论数量
+        discussion_count = QuizDiscussion.query.filter_by(quiz_id=quiz.id).count()
+        
+        # 获取回答统计
+        responses = QuizResponse.query.filter_by(quiz_id=quiz.id).all()
+        total_responses = len(responses)
+        
+        quiz_list.append({
+            'id': quiz.id,
+            'question': quiz.question,
+            'order_index': i + 1,
+            'is_active': quiz.is_active,
+            'discussion_count': discussion_count,
+            'response_count': total_responses,
+            'created_at': quiz.created_at.isoformat()
+        })
+    
+    return jsonify({
+        'success': True,
+        'quizzes': quiz_list,
+        'total_count': len(quiz_list)
+    })
 
 @quiz_bp.route('/finished', methods=['GET'])
 @require_auth
 def get_finished_quizzes():
     quizzes = Quiz.query.filter_by(is_active=False).all()  # 简化，实际应过滤用户参与的会话
     return jsonify({'quizzes': [{'id': q.id, 'question': q.question} for q in quizzes]})
+
+@quiz_bp.route('/create', methods=['POST'])
+@require_auth
+def create_quiz():
+    """创建单个题目"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': '缺少请求数据'}), 400
+    
+    # 验证必要字段
+    required_fields = ['question', 'options', 'correct_answer', 'session_id']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'缺少必要字段: {field}'}), 400
+    
+    # 验证会话存在
+    session_obj = PQSession.query.get(data['session_id'])
+    if not session_obj:
+        return jsonify({'error': '会话不存在'}), 404
+    
+    # 检查权限（组织者或演讲者可以创建题目）
+    user_id = session['user_id']
+    if session_obj.organizer_id != user_id and session_obj.speaker_id != user_id:
+        return jsonify({'error': '只有组织者和演讲者可以创建题目'}), 403
+    
+    # 验证选项格式
+    options = data['options']
+    if not isinstance(options, list) or len(options) < 2:
+        return jsonify({'error': '选项必须是至少包含2个元素的列表'}), 400
+    
+    # 验证正确答案索引
+    correct_answer = data['correct_answer']
+    if not isinstance(correct_answer, int) or correct_answer < 0 or correct_answer >= len(options):
+        return jsonify({'error': '正确答案索引无效'}), 400
+    
+    try:
+        # 准备选项数据
+        options = data['options']
+        if len(options) < 4:
+            # 如果少于4个选项，补充空选项
+            while len(options) < 4:
+                options.append("")
+        
+        # 将正确答案索引转换为字母
+        correct_answer_letters = ['A', 'B', 'C', 'D']
+        correct_answer_letter = correct_answer_letters[data['correct_answer']]
+        
+        # 创建题目
+        quiz = Quiz(
+            question=data['question'],
+            option_a=options[0],
+            option_b=options[1],
+            option_c=options[2],
+            option_d=options[3],
+            correct_answer=correct_answer_letter,
+            session_id=data['session_id'],
+            is_active=False  # 默认不激活
+        )
+        
+        db.session.add(quiz)
+        db.session.commit()
+        
+        return jsonify({
+            'message': '题目创建成功',
+            'quiz_id': quiz.id,
+            'quiz': {
+                'id': quiz.id,
+                'question': quiz.question,
+                'options': [quiz.option_a, quiz.option_b, quiz.option_c, quiz.option_d],
+                'correct_answer': data['correct_answer'],  # 返回原始索引
+                'session_id': quiz.session_id,
+                'is_active': quiz.is_active,
+                'created_at': quiz.created_at.isoformat()
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'创建题目失败: {str(e)}'}), 500
