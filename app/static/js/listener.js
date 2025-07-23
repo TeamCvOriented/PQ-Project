@@ -919,22 +919,25 @@ async function submitFeedback(feedbackType) {
 // 加载用户统计数据
 async function loadUserStats() {
     try {
-        // 获取用户参与的会话
-        const sessionsResponse = await fetch('/api/session/list');
-        if (!sessionsResponse.ok) return;
-        
-        const sessionsData = await sessionsResponse.json();
-        let totalAnswered = 0;
-        let correctAnswered = 0;
-        
-        // 这里应该调用实际的统计API
-        // 暂时显示模拟数据
+        const response = await fetch('/api/session/list');
+        if (!response.ok) return;
+        const data = await response.json();
+        const sessions = data.sessions.filter(s => s.is_participant);
+        let totalAnswered = 0, correctAnswered = 0, rank = 0, totalParticipants = 0;
+        for (const session of sessions) {
+            const statsRes = await fetch(`/api/quiz/user-stats/${session.id}`);
+            if (statsRes.ok) {
+                const stats = await statsRes.json();
+                totalAnswered += stats.total_answered;
+                correctAnswered += stats.correct_answered;
+                rank = stats.rank; // 使用最后一个会话的排名作为示例
+                totalParticipants = stats.total_participants;
+            }
+        }
         document.getElementById('totalAnswered').textContent = totalAnswered;
         document.getElementById('correctAnswered').textContent = correctAnswered;
-        document.getElementById('accuracyRate').textContent = 
-            totalAnswered > 0 ? Math.round((correctAnswered / totalAnswered) * 100) + '%' : '0%';
-        document.getElementById('userRank').textContent = '-';
-        
+        document.getElementById('accuracyRate').textContent = totalAnswered > 0 ? Math.round((correctAnswered / totalAnswered) * 100) + '%' : '0%';
+        document.getElementById('userRank').textContent = rank ? `${rank}/${totalParticipants}` : '-';
     } catch (error) {
         console.error('加载统计数据失败:', error);
     }
@@ -972,3 +975,78 @@ function showMessage(message, type) {
     const bsToast = new bootstrap.Toast(toast);
     bsToast.show();
 }
+
+// 页面加载时加载已截止题目列表
+async function loadFinishedQuizzes() {
+    try {
+        const response = await fetch('/api/quiz/finished');  // 假设添加此后端路由获取已截止题目
+        const data = await response.json();
+        const select = document.getElementById('quizSelect');
+        select.innerHTML = '<option value="">选择题目</option>';
+        data.quizzes.forEach(quiz => {
+            select.innerHTML += `<option value="${quiz.id}">${quiz.question.substring(0, 30)}...</option>`;
+        });
+    } catch (error) {
+        console.error('加载题目失败:', error);
+    }
+}
+
+// 加载特定题目的讨论
+async function loadQuizDiscussion(quizId) {
+    if (!quizId) return;
+    try {
+        const response = await fetch(`/api/quiz/${quizId}/discussions`);
+        const data = await response.json();
+        const area = document.getElementById('discussionArea');
+        area.style.display = 'block';
+        area.innerHTML = `
+            <h5>题目: ${data.quiz.question}</h5>
+            <div class="statistics">
+                <p>总回答: ${data.statistics.total_responses}</p>
+                <p>选项分布: A:${data.statistics.option_distribution.A} B:${data.statistics.option_distribution.B} C:${data.statistics.option_distribution.C} D:${data.statistics.option_distribution.D}</p>
+            </div>
+            <div class="comments">
+                ${data.discussions.map(d => `<div><small>${d.created_at}</small><p>${d.message}</p></div>`).join('')}
+            </div>
+            <textarea id="commentInput" placeholder="输入评论"></textarea>
+            <button onclick="postComment(${quizId})">发布</button>
+        `;
+    } catch (error) {
+        showMessage('加载失败', 'error');
+    }
+}
+
+// 发布评论
+async function postComment(quizId) {
+    const input = document.getElementById('commentInput');
+    const message = input.value.trim();
+    if (!message) {
+        showMessage('评论内容不能为空', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/quiz/${quizId}/discussions`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: message})
+        });
+        const data = await response.json();
+        if (response.ok) {
+            showMessage('评论发布成功', 'success');
+            input.value = '';
+            loadQuizDiscussion(quizId); // 刷新讨论区
+        } else {
+            showMessage(data.error || '发布失败', 'error');
+        }
+    } catch (error) {
+        showMessage('网络错误', 'error');
+    }
+}
+
+// 在 DOMContentLoaded 中添加事件监听
+document.addEventListener('DOMContentLoaded', function() {
+    loadFinishedQuizzes();
+    // 如果需要，添加答题区初始化
+    if (currentSessionId) checkForNewQuiz();
+});

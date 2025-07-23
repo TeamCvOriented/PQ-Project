@@ -374,10 +374,52 @@ function showStatisticsModal(statsData) {
 }
 
 // 加载统计分析
-function loadStatistics() {
-    const container = document.getElementById('statisticsContent');
-    container.innerHTML = '<p class="text-muted">统计分析功能开发中...</p>';
+async function loadStatistics() {
+    try {
+        const response = await fetch('/api/session/list');
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('sessionSelect');
+            select.innerHTML = '<option value="">选择会话</option>';
+            data.sessions.forEach(session => {
+                const option = document.createElement('option');
+                option.value = session.id;
+                option.textContent = session.title;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('加载统计失败:', error);
+    }
 }
+
+async function loadSessionStats(sessionId) {
+    if (!sessionId) return;
+    try {
+        const response = await fetch(`/api/quiz/statistics/${sessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            const container = document.getElementById('quizStats');
+            container.innerHTML = data.quiz_statistics.map(quiz => `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5>${quiz.question}</h5>
+                        <p>总回答: ${quiz.total_responses} | 答对: ${quiz.correct_responses} | 正确率: ${quiz.accuracy_rate}%</p>
+                        <p>选项分布: A:${quiz.option_distribution.A} B:${quiz.option_distribution.B} C:${quiz.option_distribution.C} D:${quiz.option_distribution.D}</p>
+                    </div>
+                </div>
+            `).join('') || '<p>暂无统计数据</p>';
+        }
+    } catch (error) {
+        console.error('加载会话统计失败:', error);
+    }
+}
+
+// 在 showSection 中调用
+// 移除以下多余代码：
+// case 'statistics':
+//     loadStatistics();
+//     break;
 
 // 登出
 async function logout() {

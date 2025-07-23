@@ -179,9 +179,11 @@
                 <!-- 统计分析 -->
                 <div id="statistics" class="content-section">
                     <h2 class="mb-4">统计分析</h2>
-                    <div id="statisticsContent">
-                        <!-- 统计内容将在这里动态加载 -->
-                    </div>
+                    <select id="sessionSelect" class="form-select mb-3" onchange="loadSessionStats(this.value)">
+                        <option value="">选择会话</option>
+                        <!-- JS动态填充 -->
+                    </select>
+                    <div id="quizStats"></div>
                 </div>
             </div>
         </div>
