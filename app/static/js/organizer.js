@@ -203,7 +203,7 @@ function displaySessions(sessions) {
     }
     
     container.innerHTML = sessions.map(session => `
-        <div class="card session-card mb-3">
+        <div class="card session-card mb-3" data-session-id="${session.id}">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
@@ -212,18 +212,19 @@ function displaySessions(sessions) {
                         <small class="text-muted">
                             演讲者: ${session.speaker} | 
                             创建时间: ${new Date(session.created_at).toLocaleDateString()} |
-                            参与人数: ${session.participant_count}
+                            参与人数: ${session.participant_count} |
+                            邀请码: <span class="badge bg-info">${session.invite_code}</span>
                         </small>
                     </div>
                     <div class="text-end">
-                        <span class="badge ${session.is_active ? 'bg-success' : 'bg-secondary'} mb-2">
+                        <span class="badge ${session.is_active ? 'bg-success' : 'bg-secondary'} mb-2 session-status-badge">
                             ${session.is_active ? '进行中' : '已结束'}
                         </span>
                         <div class="btn-group-vertical btn-group-sm">
                             <button class="btn btn-outline-primary" onclick="viewSessionDetails(${session.id})">
                                 查看详细
                             </button>
-                            <button class="btn btn-outline-${session.is_active ? 'danger' : 'success'}" 
+                            <button class="btn btn-outline-${session.is_active ? 'danger' : 'success'} session-toggle-btn" 
                                     onclick="toggleSessionStatus(${session.id}, ${!session.is_active})">
                                 ${session.is_active ? '停用' : '激活'}
                             </button>
@@ -344,6 +345,7 @@ async function createSession() {
 
 // 切换会话状态
 async function toggleSessionStatus(sessionId, isActive) {
+    console.log(`切换会话状态: sessionId=${sessionId}, isActive=${isActive}`);
     try {
         const response = await fetch(`/api/session/${sessionId}/activate`, {
             method: 'POST',
@@ -356,47 +358,102 @@ async function toggleSessionStatus(sessionId, isActive) {
         const data = await response.json();
         
         if (response.ok) {
+            console.log('状态切换成功，开始更新UI');
             showMessage(data.message, 'success');
             
             // 立即更新页面上的会话状态显示
             updateSessionStatusInUI(sessionId, isActive);
             
-            // 刷新仪表板数据（但不重新加载会话列表）
-            loadDashboardData();
+            // 立即更新模态框中的状态显示（如果模态框正在显示）
+            updateModalStatusDisplay(sessionId, isActive);
+            
+            // 只刷新仪表板统计数据，不重新加载会话列表
+            updateDashboardStats();
         } else {
             showMessage(data.error || '操作失败', 'error');
         }
     } catch (error) {
+        console.error('切换状态失败:', error);
         showMessage('网络错误，请稍后重试', 'error');
+    }
+}
+
+// 只更新仪表板统计数据，不重新加载会话列表
+async function updateDashboardStats() {
+    try {
+        const response = await fetch('/api/session/list');
+        if (response.ok) {
+            const data = await response.json();
+            const sessions = data.sessions;
+            
+            // 更新会话数量
+            document.getElementById('totalSessions').textContent = sessions.length;
+            
+            let totalParticipants = 0;
+            sessions.forEach(session => {
+                totalParticipants += session.participant_count || 0;
+            });
+            
+            // 更新参与者数量
+            document.getElementById('totalParticipants').textContent = totalParticipants;
+        }
+    } catch (error) {
+        console.error('更新仪表板统计失败:', error);
     }
 }
 
 // 立即更新UI中的会话状态
 function updateSessionStatusInUI(sessionId, isActive) {
+    console.log(`更新UI状态: sessionId=${sessionId}, isActive=${isActive}`);
     // 查找对应的会话卡片
-    const sessionCards = document.querySelectorAll('.session-card');
+    const sessionCard = document.querySelector(`[data-session-id="${sessionId}"]`);
     
-    sessionCards.forEach(card => {
-        // 查找该卡片中的停用/激活按钮
-        const toggleButton = card.querySelector(`button[onclick*="toggleSessionStatus(${sessionId}"]`);
-        
-        if (toggleButton) {
-            // 找到对应的会话卡片，更新状态显示
-            const statusBadge = card.querySelector('.badge');
-            const actionButton = toggleButton;
-            
-            if (statusBadge && actionButton) {
-                // 更新状态徽章
-                statusBadge.className = `badge ${isActive ? 'bg-success' : 'bg-secondary'} mb-2`;
-                statusBadge.textContent = isActive ? '进行中' : '已结束';
-                
-                // 更新操作按钮
-                actionButton.className = `btn btn-outline-${isActive ? 'danger' : 'success'}`;
-                actionButton.textContent = isActive ? '停用' : '激活';
-                actionButton.setAttribute('onclick', `toggleSessionStatus(${sessionId}, ${!isActive})`);
-            }
+    if (sessionCard) {
+        console.log('找到会话卡片，开始更新');
+        // 更新状态徽章
+        const statusBadge = sessionCard.querySelector('.session-status-badge');
+        if (statusBadge) {
+            console.log(`更新状态徽章: ${isActive ? '进行中' : '已结束'}`);
+            statusBadge.className = `badge ${isActive ? 'bg-success' : 'bg-secondary'} mb-2 session-status-badge`;
+            statusBadge.textContent = isActive ? '进行中' : '已结束';
+        } else {
+            console.log('未找到状态徽章');
         }
-    });
+        
+        // 更新操作按钮
+        const actionButton = sessionCard.querySelector('.session-toggle-btn');
+        if (actionButton) {
+            console.log(`更新操作按钮: ${isActive ? '停用' : '激活'}`);
+            actionButton.className = `btn btn-outline-${isActive ? 'danger' : 'success'} session-toggle-btn`;
+            actionButton.textContent = isActive ? '停用' : '激活';
+            actionButton.setAttribute('onclick', `toggleSessionStatus(${sessionId}, ${!isActive})`);
+        } else {
+            console.log('未找到操作按钮');
+        }
+    } else {
+        console.log(`未找到sessionId为${sessionId}的会话卡片`);
+    }
+}
+
+// 更新模态框中的状态显示
+function updateModalStatusDisplay(sessionId, isActive) {
+    const modal = document.getElementById('sessionDetailsModal');
+    if (modal) {
+        // 更新模态框中的状态徽章
+        const statusBadge = modal.querySelector('.badge');
+        if (statusBadge) {
+            statusBadge.className = `badge ${isActive ? 'bg-success' : 'bg-secondary'}`;
+            statusBadge.textContent = isActive ? '进行中' : '已结束';
+        }
+        
+        // 更新模态框中的操作按钮
+        const actionButton = modal.querySelector(`button[onclick*="toggleSessionStatus(${sessionId}"]`);
+        if (actionButton) {
+            actionButton.className = `btn btn-${isActive ? 'danger' : 'success'}`;
+            actionButton.textContent = isActive ? '停用会话' : '激活会话';
+            actionButton.setAttribute('onclick', `toggleSessionStatus(${sessionId}, ${!isActive})`);
+        }
+    }
 }
 
 // 查看会话详情
@@ -446,6 +503,12 @@ function showSessionDetailsModal(sessionData) {
                                         </p>
                                     </div>
                                     <div class="col-md-6">
+                                        <p><strong>邀请码:</strong> 
+                                            <span class="badge bg-primary fs-5">${sessionData.invite_code}</span>
+                                            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyInviteCode('${sessionData.invite_code}')" title="复制邀请码">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </p>
                                         <p><strong>创建时间:</strong> ${new Date(sessionData.created_at).toLocaleString('zh-CN')}</p>
                                         <p><strong>演讲者:</strong> ${sessionData.speaker.nickname || sessionData.speaker.username}</p>
                                         <p><strong>组织者:</strong> ${sessionData.organizer.username}</p>
@@ -481,8 +544,8 @@ function showSessionDetailsModal(sessionData) {
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
                         ${sessionData.is_active ? 
-                            `<button type="button" class="btn btn-danger" onclick="toggleSessionStatus(${sessionData.id}, false); bootstrap.Modal.getInstance(document.getElementById('sessionDetailsModal')).hide();">停用会话</button>` :
-                            `<button type="button" class="btn btn-success" onclick="toggleSessionStatus(${sessionData.id}, true); bootstrap.Modal.getInstance(document.getElementById('sessionDetailsModal')).hide();">激活会话</button>`
+                            `<button type="button" class="btn btn-danger" onclick="toggleSessionStatus(${sessionData.id}, false)">停用会话</button>` :
+                            `<button type="button" class="btn btn-success" onclick="toggleSessionStatus(${sessionData.id}, true)">激活会话</button>`
                         }
                     </div>
                 </div>
@@ -777,4 +840,67 @@ function displayStatistics(data) {
     `;
 
     container.innerHTML = html;
+}
+
+// 通用消息提示函数
+function showMessage(message, type = 'info') {
+    // 创建消息元素
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    messageDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    messageDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // 添加到页面
+    document.body.appendChild(messageDiv);
+    
+    // 3秒后自动移除
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.parentNode.removeChild(messageDiv);
+        }
+    }, 3000);
+}
+
+// 复制邀请码功能
+function copyInviteCode(inviteCode) {
+    // 使用现代浏览器的 Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(inviteCode).then(() => {
+            showMessage('邀请码已复制到剪贴板', 'success');
+        }).catch(() => {
+            fallbackCopyTextToClipboard(inviteCode);
+        });
+    } else {
+        // 降级处理
+        fallbackCopyTextToClipboard(inviteCode);
+    }
+}
+
+// 降级复制功能
+function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showMessage('邀请码已复制到剪贴板', 'success');
+        } else {
+            showMessage('复制失败，请手动复制邀请码', 'error');
+        }
+    } catch (err) {
+        showMessage('复制失败，请手动复制邀请码', 'error');
+    }
+    
+    document.body.removeChild(textArea);
 }

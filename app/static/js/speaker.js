@@ -26,8 +26,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 会话选择事件
     document.getElementById('quizSessionSelect').addEventListener('change', function() {
-        if (this.value) {
-            loadQuizzes(this.value);
+        const sessionId = this.value;
+        if (sessionId) {
+            currentSessionId = sessionId;
+            // 移除提示信息，只更新当前会话ID
+        } else {
+            currentSessionId = null;
         }
     });
     
@@ -140,7 +144,8 @@ function displaySessions(sessions) {
                         <small class="text-muted">
                             组织者: ${session.organizer} | 
                             参与人数: ${session.participant_count} |
-                            创建时间: ${new Date(session.created_at).toLocaleDateString()}
+                            创建时间: ${new Date(session.created_at).toLocaleDateString()} |
+                            邀请码: <span class="badge bg-info">${session.invite_code}</span>
                         </small>
                     </div>
                     <div class="text-end">
@@ -148,8 +153,8 @@ function displaySessions(sessions) {
                             ${session.is_active ? '进行中' : '未开始'}
                         </span>
                         <div class="btn-group-vertical btn-group-sm">
-                            <button class="btn btn-outline-success" onclick="selectSession(${session.id})">
-                                选择此会话
+                            <button class="btn btn-outline-primary" onclick="viewSessionDetails(${session.id})">
+                                查看详细
                             </button>
                         </div>
                     </div>
@@ -175,22 +180,6 @@ function updateSessionSelects(sessions) {
             });
         }
     });
-}
-
-// 选择会话
-function selectSession(sessionId) {
-    currentSessionId = sessionId;
-    
-    // 更新所有下拉框的选中状态
-    const selects = ['quizSessionSelect', 'statsSessionSelect'];
-    selects.forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (select) {
-            select.value = sessionId;
-        }
-    });
-    
-    showMessage('会话选择成功', 'success');
 }
 
 // 设置文件上传
@@ -420,20 +409,20 @@ function showMessage(message, type) {
 }
 
 // AI文件上传功能
-let uploadedFile = null;
+let uploadedFiles = []; // 改为数组以支持多文件
 
 function setupAIFileUpload() {
     const fileInput = document.getElementById('aiFileInput');
     const uploadArea = document.getElementById('aiUploadArea');
-    const fileInfo = document.getElementById('uploadedFileInfo');
-    const fileName = document.getElementById('fileName');
+    const filesInfo = document.getElementById('uploadedFilesInfo');
+    const filesList = document.getElementById('filesList');
     const generateBtn = document.getElementById('aiGenerateBtn');
     
-    // 文件选择事件
+    // 文件选择事件 - 支持多文件
     fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            handleAIFileSelect(file);
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+            handleMultipleFileSelect(files);
         }
     });
     
@@ -452,64 +441,143 @@ function setupAIFileUpload() {
         e.preventDefault();
         uploadArea.style.backgroundColor = '#f8f9fa';
         
-        const files = e.dataTransfer.files;
+        const files = Array.from(e.dataTransfer.files);
         if (files.length > 0) {
-            const file = files[0];
-            if (file.type === 'application/pdf' || 
-                file.name.endsWith('.ppt') || 
-                file.name.endsWith('.pptx')) {
-                handleAIFileSelect(file);
+            // 过滤出支持的文件类型
+            const validFiles = files.filter(file => {
+                return file.type === 'application/pdf' || 
+                       file.name.endsWith('.ppt') || 
+                       file.name.endsWith('.pptx');
+            });
+            
+            if (validFiles.length > 0) {
+                handleMultipleFileSelect(validFiles);
+                if (validFiles.length < files.length) {
+                    showMessage(`已选择${validFiles.length}个有效文件，${files.length - validFiles.length}个文件格式不支持`, 'warning');
+                }
             } else {
                 showMessage('请选择PDF或PPT文件', 'error');
             }
         }
     });
-    
-    // 点击上传区域触发文件选择
-    uploadArea.addEventListener('click', function() {
-        fileInput.click();
-    });
 }
 
-function handleAIFileSelect(file) {
-    // 验证文件类型
+function handleMultipleFileSelect(files) {
+    // 验证文件类型和大小
     const allowedTypes = ['application/pdf', 'application/vnd.ms-powerpoint', 
                          'application/vnd.openxmlformats-officedocument.presentationml.presentation'];
     const allowedExtensions = ['.pdf', '.ppt', '.pptx'];
     
-    const isValidType = allowedTypes.includes(file.type) || 
-                       allowedExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+    const validFiles = [];
+    const invalidFiles = [];
     
-    if (!isValidType) {
-        showMessage('请选择PDF或PPT文件', 'error');
-        return;
+    files.forEach(file => {
+        const isValidType = allowedTypes.includes(file.type) || 
+                           allowedExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+        
+        if (!isValidType) {
+            invalidFiles.push(file.name + ' (格式不支持)');
+            return;
+        }
+        
+        // 验证文件大小（限制为50MB）
+        if (file.size > 50 * 1024 * 1024) {
+            invalidFiles.push(file.name + ' (文件太大)');
+            return;
+        }
+        
+        // 检查是否已经添加过这个文件
+        const isDuplicate = uploadedFiles.some(f => f.name === file.name && f.size === file.size);
+        if (isDuplicate) {
+            invalidFiles.push(file.name + ' (文件已存在)');
+            return;
+        }
+        
+        validFiles.push(file);
+    });
+    
+    // 添加有效文件到列表
+    uploadedFiles.push(...validFiles);
+    
+    // 更新显示
+    updateFilesDisplay();
+    
+    // 显示结果消息
+    if (validFiles.length > 0) {
+        let message = `成功添加${validFiles.length}个文件`;
+        if (invalidFiles.length > 0) {
+            message += `，${invalidFiles.length}个文件无效：${invalidFiles.join(', ')}`;
+        }
+        showMessage(message, validFiles.length > 0 ? 'success' : 'warning');
+    } else if (invalidFiles.length > 0) {
+        showMessage(`文件无效：${invalidFiles.join(', ')}`, 'error');
     }
-    
-    // 验证文件大小（限制为50MB）
-    if (file.size > 50 * 1024 * 1024) {
-        showMessage('文件大小不能超过50MB', 'error');
-        return;
-    }
-    
-    uploadedFile = file;
-    
-    // 显示文件信息
-    document.getElementById('fileName').textContent = file.name;
-    document.getElementById('uploadedFileInfo').style.display = 'block';
-    document.getElementById('aiGenerateBtn').disabled = false;
-    
-    showMessage('文件上传成功，现在可以生成题目了', 'success');
 }
 
-function clearUploadedFile() {
-    uploadedFile = null;
+function updateFilesDisplay() {
+    const filesInfo = document.getElementById('uploadedFilesInfo');
+    const filesList = document.getElementById('filesList');
+    const generateBtn = document.getElementById('aiGenerateBtn');
+    
+    if (uploadedFiles.length === 0) {
+        filesInfo.style.display = 'none';
+        generateBtn.disabled = true;
+        return;
+    }
+    
+    filesInfo.style.display = 'block';
+    generateBtn.disabled = false;
+    
+    // 生成文件列表HTML
+    filesList.innerHTML = uploadedFiles.map((file, index) => `
+        <div class="d-flex align-items-center justify-content-between p-2 border rounded mb-2" data-file-index="${index}">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-file-${getFileIcon(file.name)} text-primary me-2"></i>
+                <div>
+                    <div class="fw-bold">${file.name}</div>
+                    <small class="text-muted">${formatFileSize(file.size)}</small>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})" title="移除文件">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function getFileIcon(filename) {
+    const ext = filename.toLowerCase().split('.').pop();
+    switch(ext) {
+        case 'pdf': return 'pdf';
+        case 'ppt':
+        case 'pptx': return 'powerpoint';
+        default: return 'alt';
+    }
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function removeFile(index) {
+    uploadedFiles.splice(index, 1);
+    updateFilesDisplay();
+    showMessage('文件已移除', 'info');
+}
+
+function clearAllUploadedFiles() {
+    uploadedFiles = [];
     document.getElementById('aiFileInput').value = '';
-    document.getElementById('uploadedFileInfo').style.display = 'none';
-    document.getElementById('aiGenerateBtn').disabled = true;
+    updateFilesDisplay();
+    showMessage('所有文件已清空', 'info');
 }
 
 async function generateAIQuizzes() {
-    if (!uploadedFile) {
+    if (!uploadedFiles || uploadedFiles.length === 0) {
         showMessage('请先上传文件', 'error');
         return;
     }
@@ -523,14 +591,20 @@ async function generateAIQuizzes() {
     const generateBtn = document.getElementById('aiGenerateBtn');
     const originalText = generateBtn.innerHTML;
     generateBtn.disabled = true;
-    generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>AI正在生成题目...';
+    generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>AI正在分析多个文件并生成题目...';
     
     try {
         const formData = new FormData();
-        formData.append('file', uploadedFile);
-        formData.append('num_questions', '5'); // 生成5道题目
         
-        const response = await fetch('/api/quiz/upload', {
+        // 添加所有文件到FormData
+        uploadedFiles.forEach((file, index) => {
+            formData.append('files', file); // 使用'files'作为字段名以支持多文件
+        });
+        
+        formData.append('num_questions', '5'); // 生成5道题目
+        formData.append('session_id', sessionId);
+        
+        const response = await fetch('/api/quiz/upload-multiple', {
             method: 'POST',
             body: formData
         });
@@ -538,13 +612,13 @@ async function generateAIQuizzes() {
         if (response.ok) {
             const result = await response.json();
             if (result.success) {
-                showMessage(`成功生成${result.questions.length}道题目`, 'success');
+                showMessage(`成功基于${uploadedFiles.length}个文件生成${result.questions.length}道题目`, 'success');
                 
                 // 显示生成的题目
                 displayGeneratedQuizzes(result.questions, sessionId);
                 
                 // 清除上传的文件
-                clearUploadedFile();
+                clearAllUploadedFiles();
             } else {
                 showMessage(result.message || 'AI生成题目失败', 'error');
             }
@@ -995,4 +1069,156 @@ function displayStatistics(data) {
             </div>
         </div>
     `;
+}
+
+// 查看会话详情
+async function viewSessionDetails(sessionId) {
+    try {
+        const response = await fetch(`/api/session/${sessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            showSessionDetailsModal(data);
+        } else {
+            showMessage('加载会话详情失败', 'error');
+        }
+    } catch (error) {
+        showMessage('加载会话详情失败', 'error');
+    }
+}
+
+// 显示会话详情模态框
+function showSessionDetailsModal(sessionData) {
+    // 创建详细的会话信息显示
+    const modalHtml = `
+        <div class="modal fade" id="sessionDetailsModal" tabindex="-1" aria-labelledby="sessionDetailsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="sessionDetailsModalLabel">
+                            <i class="fas fa-info-circle me-2"></i>会话详细信息
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- 基本信息 -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>基本信息</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>会话标题:</strong> ${sessionData.title}</p>
+                                        <p><strong>会话描述:</strong> ${sessionData.description || '暂无描述'}</p>
+                                        <p><strong>会话状态:</strong> 
+                                            <span class="badge ${sessionData.is_active ? 'bg-success' : 'bg-secondary'}">
+                                                ${sessionData.is_active ? '进行中' : '已结束'}
+                                            </span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>邀请码:</strong> 
+                                            <span class="badge bg-primary fs-5">${sessionData.invite_code}</span>
+                                            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyInviteCode('${sessionData.invite_code}')" title="复制邀请码">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </p>
+                                        <p><strong>创建时间:</strong> ${new Date(sessionData.created_at).toLocaleString('zh-CN')}</p>
+                                        <p><strong>演讲者:</strong> ${sessionData.speaker.nickname || sessionData.speaker.username}</p>
+                                        <p><strong>组织者:</strong> ${sessionData.organizer.username}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 参与者信息 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-users me-2"></i>参与者信息 (${sessionData.participants.length}人)</h6>
+                            </div>
+                            <div class="card-body">
+                                ${sessionData.participants.length > 0 ? `
+                                    <div class="row">
+                                        ${sessionData.participants.map(participant => `
+                                            <div class="col-md-6 col-lg-4 mb-2">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-user-circle text-primary me-2"></i>
+                                                    <div>
+                                                        <small class="fw-bold">${participant.nickname || participant.username}</small><br>
+                                                        <small class="text-muted">加入时间: ${new Date(participant.joined_at).toLocaleString('zh-CN')}</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : '<p class="text-muted">暂无参与者</p>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('sessionDetailsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // 添加新的模态框到页面
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('sessionDetailsModal'));
+    modal.show();
+
+    // 模态框关闭后清理DOM
+    document.getElementById('sessionDetailsModal').addEventListener('hidden.bs.modal', function () {
+        this.remove();
+    });
+}
+
+// 复制邀请码功能
+function copyInviteCode(inviteCode) {
+    // 使用现代浏览器的 Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(inviteCode).then(() => {
+            showMessage('邀请码已复制到剪贴板', 'success');
+        }).catch(() => {
+            fallbackCopyTextToClipboard(inviteCode);
+        });
+    } else {
+        // 降级处理
+        fallbackCopyTextToClipboard(inviteCode);
+    }
+}
+
+// 降级复制功能
+function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showMessage('邀请码已复制到剪贴板', 'success');
+        } else {
+            showMessage('复制失败，请手动复制邀请码', 'error');
+        }
+    } catch (err) {
+        showMessage('复制失败，请手动复制邀请码', 'error');
+    }
+    
+    document.body.removeChild(textArea);
 }

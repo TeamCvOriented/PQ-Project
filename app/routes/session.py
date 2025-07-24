@@ -25,11 +25,15 @@ def create_session():
         return jsonify({'error': '演讲者不存在'}), 404
     
     try:
+        # 生成唯一邀请码
+        invite_code = PQSession.generate_unique_invite_code()
+        
         pq_session = PQSession(
             title=data['title'],
             description=data.get('description', ''),
             organizer_id=session['user_id'],
             speaker_id=data['speaker_id'],
+            invite_code=invite_code,
             quiz_interval=10  # 默认10分钟，由演讲者控制出题时机
         )
         
@@ -44,6 +48,7 @@ def create_session():
                 'description': pq_session.description,
                 'organizer_id': pq_session.organizer_id,
                 'speaker_id': pq_session.speaker_id,
+                'invite_code': pq_session.invite_code,
                 'is_active': pq_session.is_active,
                 'quiz_interval': pq_session.quiz_interval,
                 'created_at': pq_session.created_at.isoformat()
@@ -88,6 +93,7 @@ def list_sessions():
             'description': s.description,
             'organizer': s.organizer.username,
             'speaker': s.speaker.username,
+            'invite_code': s.invite_code,
             'is_active': s.is_active,
             'quiz_interval': s.quiz_interval,
             'created_at': s.created_at.isoformat(),
@@ -130,6 +136,7 @@ def get_session(session_id):
             'id': pq_session.speaker_id,
             'username': pq_session.speaker.username
         },
+        'invite_code': pq_session.invite_code,
         'is_active': pq_session.is_active,
         'quiz_interval': pq_session.quiz_interval,
         'created_at': pq_session.created_at.isoformat(),
@@ -170,6 +177,71 @@ def join_session(session_id):
         db.session.commit()
         
         return jsonify({'message': '成功加入会话'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'加入会话失败: {str(e)}'}), 500
+
+@session_bp.route('/join-by-code', methods=['POST'])
+@require_auth
+def join_session_by_code():
+    """通过邀请码加入会话（听众功能）"""
+    user_id = session['user_id']
+    user_role = session.get('user_role')
+    
+    if user_role != 'listener':
+        return jsonify({'error': '只有听众可以加入会话'}), 403
+    
+    data = request.get_json()
+    if not data or not data.get('invite_code'):
+        return jsonify({'error': '请提供邀请码'}), 400
+    
+    invite_code = data['invite_code'].strip()
+    if len(invite_code) != 6 or not invite_code.isdigit():
+        return jsonify({'error': '邀请码格式错误，应为6位数字'}), 400
+    
+    # 查找对应的会话
+    pq_session = PQSession.query.filter_by(invite_code=invite_code).first()
+    if not pq_session:
+        return jsonify({'error': '邀请码不存在'}), 404
+    
+    # 检查是否已经参与
+    existing_participant = SessionParticipant.query.filter_by(
+        session_id=pq_session.id, 
+        user_id=user_id
+    ).first()
+    
+    if existing_participant:
+        return jsonify({
+            'message': '您已经参与了该会话',
+            'session': {
+                'id': pq_session.id,
+                'title': pq_session.title,
+                'description': pq_session.description,
+                'invite_code': pq_session.invite_code,
+                'is_active': pq_session.is_active
+            }
+        })
+    
+    try:
+        participant = SessionParticipant(
+            session_id=pq_session.id,
+            user_id=user_id
+        )
+        
+        db.session.add(participant)
+        db.session.commit()
+        
+        return jsonify({
+            'message': '成功加入会话',
+            'session': {
+                'id': pq_session.id,
+                'title': pq_session.title,
+                'description': pq_session.description,
+                'invite_code': pq_session.invite_code,
+                'is_active': pq_session.is_active
+            }
+        })
         
     except Exception as e:
         db.session.rollback()

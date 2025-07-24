@@ -144,21 +144,27 @@
                             <div class="upload-area mb-3" id="aiUploadArea">
                                 <i class="fas fa-cloud-upload-alt fa-2x text-primary mb-2"></i>
                                 <h6>上传演讲文件</h6>
-                                <p class="text-muted small">支持 PDF 和 PPT 文件</p>
-                                <input type="file" id="aiFileInput" accept=".pdf,.ppt,.pptx" style="display: none;">
+                                <p class="text-muted small">支持 PDF 和 PPTX 文件，可选择多个文件</p>
+                                <input type="file" id="aiFileInput" accept=".pdf,.ppt,.pptx" multiple style="display: none;">
                                 <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('aiFileInput').click()">
                                     <i class="fas fa-folder-open me-2"></i>选择文件
                                 </button>
                             </div>
                             
                             <!-- 上传文件信息显示 -->
-                            <div id="uploadedFileInfo" class="mb-3" style="display: none;">
-                                <div class="alert alert-info d-flex align-items-center">
-                                    <i class="fas fa-file me-2"></i>
-                                    <span id="fileName"></span>
-                                    <button class="btn btn-sm btn-outline-danger ms-auto" onclick="clearUploadedFile()">
-                                        <i class="fas fa-times"></i>
-                                    </button>
+                            <div id="uploadedFilesInfo" class="mb-3" style="display: none;">
+                                <div class="card">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">已选择的文件</h6>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="clearAllUploadedFiles()">
+                                            <i class="fas fa-trash me-1"></i>清空所有
+                                        </button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="filesList">
+                                            <!-- 文件列表将在这里显示 -->
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             

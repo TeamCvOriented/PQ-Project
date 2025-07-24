@@ -20,6 +20,11 @@
             color: white;
             background-color: #218838;
         }
+        .sidebar .nav-link:disabled {
+            color: #6c757d;
+            background-color: transparent;
+            cursor: not-allowed;
+        }
         .content-section {
             display: none;
         }
@@ -169,6 +174,19 @@
             50% { opacity: 0.5; }
             100% { opacity: 1; }
         }
+        .session-selector {
+            background: #e3f2fd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .current-session-info {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -185,31 +203,32 @@
                 <ul class="nav nav-pills flex-column">
                     <li class="nav-item">
                         <a class="nav-link active" href="#" data-section="sessions">
-                            <i class="fas fa-calendar me-2"></i>加入会话
+                            <i class="fas fa-calendar me-2"></i>我的会话
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="quiz">
+                    <!-- 以下导航项初始时隐藏，选择会话后显示 -->
+                    <li class="nav-item" id="quizNavItem" style="display: none;">
+                        <a class="nav-link" href="#" data-section="quiz" id="quizNavLink">
                             <i class="fas fa-question-circle me-2"></i>当前题目
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="results">
+                    <li class="nav-item" id="resultsNavItem" style="display: none;">
+                        <a class="nav-link" href="#" data-section="results" id="resultsNavLink">
                             <i class="fas fa-chart-line me-2"></i>答题结果
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="discussions">
+                    <li class="nav-item" id="discussionsNavItem" style="display: none;">
+                        <a class="nav-link" href="#" data-section="discussions" id="discussionsNavLink">
                             <i class="fas fa-comments me-2"></i>讨论区
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="feedback">
+                    <li class="nav-item" id="feedbackNavItem" style="display: none;">
+                        <a class="nav-link" href="#" data-section="feedback" id="feedbackNavLink">
                             <i class="fas fa-comment-dots me-2"></i>反馈
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="statistics">
+                    <li class="nav-item" id="statisticsNavItem" style="display: none;">
+                        <a class="nav-link" href="#" data-section="statistics" id="statisticsNavLink">
                             <i class="fas fa-trophy me-2"></i>成绩统计
                         </a>
                     </li>
@@ -223,13 +242,26 @@
             
             <!-- 主内容区 -->
             <div class="col-md-9 col-lg-10 p-4">
-                <!-- 加入会话 -->
+                <!-- 我的会话 -->
                 <div id="sessions" class="content-section active">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>可加入的会话</h2>
+                        <h2>我的会话</h2>
                         <button class="btn btn-success" onclick="refreshSessions()">
                             <i class="fas fa-sync-alt me-2"></i>刷新
                         </button>
+                    </div>
+                    
+                    <!-- 当前选中的会话信息 -->
+                    <div id="currentSessionInfo" class="current-session-info" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-1">当前会话</h5>
+                                <p class="mb-0" id="currentSessionTitle">-</p>
+                            </div>
+                            <button class="btn btn-light btn-sm" onclick="leaveCurrentSession()">
+                                <i class="fas fa-sign-out-alt me-1"></i>离开会话
+                            </button>
+                        </div>
                     </div>
                     
                     <div id="sessionsList">
@@ -244,107 +276,131 @@
 
                 <!-- 当前题目 -->
                 <div id="quiz" class="content-section">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>当前题目</h2>
-                        <div class="timer" id="timer">--:--</div>
+                    <div class="session-selector" id="quizSessionSelector">
+                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
                     </div>
                     
-                    <div id="quizContent">
-                        <div class="text-center waiting-animation">
-                            <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                            <h4>等待题目发布...</h4>
-                            <p class="text-muted">请耐心等待演讲者发布新题目</p>
+                    <div id="quizSessionContent" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2>当前题目</h2>
+                            <div class="timer" id="timer">--:--</div>
+                        </div>
+                        
+                        <div id="quizContent">
+                            <div class="text-center waiting-animation">
+                                <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+                                <h4>等待题目发布...</h4>
+                                <p class="text-muted">请耐心等待演讲者发布新题目</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 答题结果 -->
                 <div id="results" class="content-section">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>答题结果</h2>
-                        <button class="btn btn-success" onclick="refreshResults()">
-                            <i class="fas fa-sync-alt me-2"></i>刷新
-                        </button>
+                    <div class="session-selector" id="resultsSessionSelector">
+                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
                     </div>
                     
-                    <div id="resultsContent">
-                        <div class="text-center">
-                            <p class="text-muted">暂无答题记录</p>
+                    <div id="resultsSessionContent" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2>答题结果</h2>
+                            <button class="btn btn-success" onclick="refreshResults()">
+                                <i class="fas fa-sync-alt me-2"></i>刷新
+                            </button>
+                        </div>
+                        
+                        <div id="resultsContent">
+                            <div class="text-center">
+                                <p class="text-muted">暂无答题记录</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 讨论区 -->
                 <div id="discussions" class="content-section">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>讨论区</h2>
-                        <button class="btn btn-success" onclick="refreshDiscussions()">
-                            <i class="fas fa-sync-alt me-2"></i>刷新
-                        </button>
+                    <div class="session-selector" id="discussionsSessionSelector">
+                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
                     </div>
                     
-                    <div id="discussionsContent">
-                        <div class="text-center">
-                            <p class="text-muted">请先选择一个题目进行讨论</p>
+                    <div id="discussionsSessionContent" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2>讨论区</h2>
+                            <button class="btn btn-success" onclick="refreshDiscussions()">
+                                <i class="fas fa-sync-alt me-2"></i>刷新
+                            </button>
+                        </div>
+                        
+                        <div id="discussionsContent">
+                            <div class="text-center">
+                                <p class="text-muted">请先选择一个题目进行讨论</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 反馈 -->
                 <div id="feedback" class="content-section">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>反馈</h2>
+                    <div class="session-selector" id="feedbackSessionSelector">
+                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-8">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5><i class="fas fa-comment-dots me-2"></i>向演讲者反馈</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">反馈类型</label>
-                                        <div class="btn-group-vertical d-grid gap-2">
-                                            <button class="btn btn-outline-warning feedback-btn" data-type="too_fast">
-                                                <i class="fas fa-forward me-2"></i>讲得太快
-                                            </button>
-                                            <button class="btn btn-outline-info feedback-btn" data-type="too_slow">
-                                                <i class="fas fa-backward me-2"></i>讲得太慢
-                                            </button>
-                                            <button class="btn btn-outline-secondary feedback-btn" data-type="boring">
-                                                <i class="fas fa-bed me-2"></i>内容乏味
-                                            </button>
-                                            <button class="btn btn-outline-danger feedback-btn" data-type="bad_question">
-                                                <i class="fas fa-question me-2"></i>题目质量不好
-                                            </button>
-                                            <button class="btn btn-outline-dark feedback-btn" data-type="environment">
-                                                <i class="fas fa-volume-down me-2"></i>环境问题
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="mb-3">
-                                        <label for="feedbackContent" class="form-label">详细说明（可选）</label>
-                                        <textarea class="form-control" id="feedbackContent" rows="3" placeholder="请详细描述您的反馈..."></textarea>
-                                    </div>
-                                    
-                                    <button class="btn btn-success" onclick="submitFeedback()">
-                                        <i class="fas fa-paper-plane me-2"></i>提交反馈
-                                    </button>
-                                </div>
-                            </div>
+                    <div id="feedbackSessionContent" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2>反馈</h2>
                         </div>
                         
-                        <div class="col-md-4">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6><i class="fas fa-info-circle me-2"></i>反馈说明</h6>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-comment-dots me-2"></i>向演讲者反馈</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">反馈类型</label>
+                                            <div class="btn-group-vertical d-grid gap-2">
+                                                <button class="btn btn-outline-warning feedback-btn" data-type="too_fast">
+                                                    <i class="fas fa-forward me-2"></i>讲得太快
+                                                </button>
+                                                <button class="btn btn-outline-info feedback-btn" data-type="too_slow">
+                                                    <i class="fas fa-backward me-2"></i>讲得太慢
+                                                </button>
+                                                <button class="btn btn-outline-secondary feedback-btn" data-type="boring">
+                                                    <i class="fas fa-bed me-2"></i>内容乏味
+                                                </button>
+                                                <button class="btn btn-outline-danger feedback-btn" data-type="bad_question">
+                                                    <i class="fas fa-question me-2"></i>题目质量不好
+                                                </button>
+                                                <button class="btn btn-outline-dark feedback-btn" data-type="environment">
+                                                    <i class="fas fa-volume-down me-2"></i>环境问题
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="feedbackContent" class="form-label">详细说明（可选）</label>
+                                            <textarea class="form-control" id="feedbackContent" rows="3" placeholder="请详细描述您的反馈..."></textarea>
+                                        </div>
+                                        
+                                        <button class="btn btn-success" onclick="submitFeedback()">
+                                            <i class="fas fa-paper-plane me-2"></i>提交反馈
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="card-body">
-                                    <small class="text-muted">
-                                        您的反馈将帮助演讲者改进演讲质量。所有反馈都是匿名的，演讲者只能看到反馈类型和统计数据。
-                                    </small>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6><i class="fas fa-info-circle me-2"></i>反馈说明</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <small class="text-muted">
+                                            您的反馈将帮助演讲者改进演讲质量。所有反馈都是匿名的，演讲者只能看到反馈类型和统计数据。
+                                        </small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -353,16 +409,22 @@
 
                 <!-- 成绩统计 -->
                 <div id="statistics" class="content-section">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>成绩统计</h2>
-                        <button class="btn btn-success" onclick="refreshStatistics()">
-                            <i class="fas fa-sync-alt me-2"></i>刷新
-                        </button>
+                    <div class="session-selector" id="statisticsSessionSelector">
+                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
                     </div>
                     
-                    <div id="statisticsContent">
-                        <div class="text-center">
-                            <p class="text-muted">请先加入会话查看统计数据</p>
+                    <div id="statisticsSessionContent" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2>成绩统计</h2>
+                            <button class="btn btn-success" onclick="refreshStatistics()">
+                                <i class="fas fa-sync-alt me-2"></i>刷新
+                            </button>
+                        </div>
+                        
+                        <div id="statisticsContent">
+                            <div class="text-center">
+                                <p class="text-muted">请先加入会话查看统计数据</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -384,6 +446,29 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                     <button type="button" class="btn btn-success" onclick="confirmJoinSession()">确定加入</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通过邀请码加入会话模态框 -->
+    <div class="modal fade" id="joinByCodeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">通过邀请码加入会话</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="inviteCode" class="form-label">邀请码</label>
+                        <input type="text" class="form-control" id="inviteCode" placeholder="请输入6位邀请码">
+                    </div>
+                    <small class="text-muted">请向会话组织者获取邀请码</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-success" onclick="joinByInviteCode()">加入会话</button>
                 </div>
             </div>
         </div>

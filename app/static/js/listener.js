@@ -142,6 +142,11 @@ function showSection(sectionName) {
     if (targetSection) {
         targetSection.classList.add('active');
         
+        // 如果不是会话页面且没有选择会话，则不执行加载操作
+        if (sectionName !== 'sessions' && !currentSessionId) {
+            return;
+        }
+        
         // 根据不同的区域执行相应的加载操作
         switch(sectionName) {
             case 'sessions':
@@ -189,13 +194,18 @@ function displayAvailableSessions(sessions) {
                 <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
                 <h4>暂无可加入的会话</h4>
                 <p class="text-muted">请等待组织者创建新的会话</p>
+                <div class="mt-3">
+                    <button class="btn btn-primary" onclick="showJoinByCodeModal()">
+                        <i class="fas fa-key me-2"></i>通过邀请码加入
+                    </button>
+                </div>
             </div>
         `;
         return;
     }
     
     container.innerHTML = sessions.map(session => `
-        <div class="card session-card mb-3" onclick="showJoinSessionModal(${session.id}, '${session.title}')">
+        <div class="card session-card mb-3">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
@@ -217,14 +227,30 @@ function displayAvailableSessions(sessions) {
                     </div>
                 </div>
                 <div class="mt-3">
-                    <button class="btn btn-${session.is_participant ? 'secondary' : 'success'} btn-sm">
-                        <i class="fas fa-${session.is_participant ? 'check' : 'sign-in-alt'} me-1"></i>
-                        ${session.is_participant ? '已加入' : '加入会话'}
-                    </button>
+                    ${session.is_participant ? 
+                        `<button class="btn btn-success btn-sm me-2" onclick="selectSession(${session.id}, '${session.title}')">
+                            <i class="fas fa-play me-1"></i>进入会话
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="leaveSession(${session.id})">
+                            <i class="fas fa-sign-out-alt me-1"></i>离开会话
+                        </button>` :
+                        `<button class="btn btn-primary btn-sm" onclick="showJoinSessionModal(${session.id}, '${session.title}')">
+                            <i class="fas fa-sign-in-alt me-1"></i>加入会话
+                        </button>`
+                    }
                 </div>
             </div>
         </div>
     `).join('');
+    
+    // 添加通过邀请码加入的按钮
+    container.innerHTML += `
+        <div class="text-center mt-4">
+            <button class="btn btn-outline-primary" onclick="showJoinByCodeModal()">
+                <i class="fas fa-key me-2"></i>通过邀请码加入会话
+            </button>
+        </div>
+    `;
 }
 
 // 显示加入会话确认模态框
@@ -1354,9 +1380,193 @@ function showMessage(message, type = 'info') {
     }, 3000);
 }
 
+// 选择会话
+function selectSession(sessionId, sessionTitle) {
+    currentSessionId = sessionId;
+    
+    // 显示当前会话信息
+    document.getElementById('currentSessionInfo').style.display = 'block';
+    document.getElementById('currentSessionTitle').textContent = sessionTitle;
+    
+    // 显示其他导航项
+    enableNavigation();
+    
+    // 自动跳转到当前题目页面
+    showSection('quiz');
+    document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+    document.querySelector('[data-section="quiz"]').classList.add('active');
+    
+    // 开始检查当前题目
+    checkCurrentQuiz();
+    
+    showMessage(`已进入会话: ${sessionTitle}`, 'success');
+}
+
+// 启用导航功能
+function enableNavigation() {
+    const navItems = ['quizNavItem', 'resultsNavItem', 'discussionsNavItem', 'feedbackNavItem', 'statisticsNavItem'];
+    navItems.forEach(itemId => {
+        const item = document.getElementById(itemId);
+        if (item) {
+            item.style.display = 'block';
+        }
+    });
+    
+    // 隐藏所有区域的会话选择提示，显示内容
+    const sessionSelectors = ['quizSessionSelector', 'resultsSessionSelector', 'discussionsSessionSelector', 'feedbackSessionSelector', 'statisticsSessionSelector'];
+    const sessionContents = ['quizSessionContent', 'resultsSessionContent', 'discussionsSessionContent', 'feedbackSessionContent', 'statisticsSessionContent'];
+    
+    sessionSelectors.forEach(selectorId => {
+        const selector = document.getElementById(selectorId);
+        if (selector) {
+            selector.style.display = 'none';
+        }
+    });
+    
+    sessionContents.forEach(contentId => {
+        const content = document.getElementById(contentId);
+        if (content) {
+            content.style.display = 'block';
+        }
+    });
+}
+
+// 禁用导航功能
+function disableNavigation() {
+    const navItems = ['quizNavItem', 'resultsNavItem', 'discussionsNavItem', 'feedbackNavItem', 'statisticsNavItem'];
+    navItems.forEach(itemId => {
+        const item = document.getElementById(itemId);
+        if (item) {
+            item.style.display = 'none';
+        }
+    });
+    
+    // 显示所有区域的会话选择提示，隐藏内容
+    const sessionSelectors = ['quizSessionSelector', 'resultsSessionSelector', 'discussionsSessionSelector', 'feedbackSessionSelector', 'statisticsSessionSelector'];
+    const sessionContents = ['quizSessionContent', 'resultsSessionContent', 'discussionsSessionContent', 'feedbackSessionContent', 'statisticsSessionContent'];
+    
+    sessionSelectors.forEach(selectorId => {
+        const selector = document.getElementById(selectorId);
+        if (selector) {
+            selector.style.display = 'block';
+        }
+    });
+    
+    sessionContents.forEach(contentId => {
+        const content = document.getElementById(contentId);
+        if (content) {
+            content.style.display = 'none';
+        }
+    });
+}
+
+// 离开当前会话
+function leaveCurrentSession() {
+    currentSessionId = null;
+    currentQuizId = null;
+    
+    // 隐藏当前会话信息
+    document.getElementById('currentSessionInfo').style.display = 'none';
+    
+    // 禁用导航功能
+    disableNavigation();
+    
+    // 切换回我的会话页面
+    showSection('sessions');
+    document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+    document.querySelector('[data-section="sessions"]').classList.add('active');
+    
+    // 重新加载会话列表
+    loadAvailableSessions();
+    
+    showMessage('已离开当前会话', 'info');
+}
+
+// 离开指定会话
+async function leaveSession(sessionId) {
+    if (confirm('确定要离开这个会话吗？')) {
+        try {
+            const response = await fetch(`/api/session/${sessionId}/leave`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                showMessage('已离开会话', 'success');
+                
+                // 如果离开的是当前会话，重置状态
+                if (currentSessionId === sessionId) {
+                    leaveCurrentSession();
+                } else {
+                    // 重新加载会话列表
+                    loadAvailableSessions();
+                }
+            } else {
+                showMessage(data.error || '离开会话失败', 'error');
+            }
+        } catch (error) {
+            console.error('离开会话失败:', error);
+            showMessage('网络错误，请稍后重试', 'error');
+        }
+    }
+}
+
 // 刷新会话列表
 function refreshSessions() {
     loadAvailableSessions();
+    showMessage('会话列表已刷新', 'info');
+}
+
+// 显示通过邀请码加入会话的模态框
+function showJoinByCodeModal() {
+    new bootstrap.Modal(document.getElementById('joinByCodeModal')).show();
+}
+
+// 通过邀请码加入会话
+async function joinByInviteCode() {
+    const inviteCode = document.getElementById('inviteCode').value.trim();
+    
+    if (!inviteCode) {
+        showMessage('请输入邀请码', 'warning');
+        return;
+    }
+    
+    if (inviteCode.length !== 6) {
+        showMessage('邀请码应为6位字符', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/session/join-by-code', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                invite_code: inviteCode
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showMessage('成功加入会话！', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('joinByCodeModal')).hide();
+            document.getElementById('inviteCode').value = '';
+            
+            // 刷新已加入的会话列表
+            loadJoinedSessions();
+        } else {
+            showMessage(data.error || '加入会话失败', 'error');
+        }
+    } catch (error) {
+        console.error('加入会话失败:', error);
+        showMessage('网络错误，请稍后重试', 'error');
+    }
 }
 
 // 退出登录

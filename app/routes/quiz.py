@@ -730,6 +730,128 @@ def generate_ai_quizzes():
         print(f"AI题目生成路由错误: {e}")
         return jsonify({'error': '系统错误，请重试'}), 500
 
+@quiz_bp.route('/upload-multiple', methods=['POST'])
+def upload_multiple_files_and_generate_quiz():
+    """上传多个文件并生成题目"""
+    try:
+        # 检查是否有文件
+        if 'files' not in request.files:
+            return jsonify({'success': False, 'message': '请选择文件'}), 400
+        
+        files = request.files.getlist('files')
+        num_questions = int(request.form.get('num_questions', 5))
+        session_id = request.form.get('session_id')
+        
+        if not files or len(files) == 0:
+            return jsonify({'success': False, 'message': '请选择文件'}), 400
+            
+        if not session_id:
+            return jsonify({'success': False, 'message': '请选择会话'}), 400
+        
+        # 验证会话存在且用户有权限
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'success': False, 'message': '会话不存在'}), 404
+        
+        user_id = session['user_id']
+        if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
+            return jsonify({'success': False, 'message': '权限不足'}), 403
+        
+        # 处理所有文件并合并文本内容
+        all_text_content = []
+        processed_files = []
+        failed_files = []
+        
+        try:
+            from app.file_processor import FileProcessor
+            from app.quiz_generator import QuizGenerator
+            
+            file_processor = FileProcessor()
+            
+            for file in files:
+                if not file or file.filename == '':
+                    continue
+                    
+                # 验证文件类型
+                allowed_extensions = ['.pdf', '.ppt', '.pptx']
+                file_ext = '.' + file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+                
+                if file_ext not in allowed_extensions:
+                    failed_files.append(f"{file.filename} (格式不支持)")
+                    continue
+                
+                try:
+                    # 读取文件内容
+                    file_content = file.read()
+                    file.seek(0)  # 重置文件指针
+                    
+                    # 提取文本内容
+                    if file_ext == '.pdf':
+                        text_content = file_processor.extract_text_from_pdf_bytes(file_content)
+                    else:  # PPT files
+                        text_content = file_processor.extract_text_from_ppt_bytes(file_content)
+                    
+                    if text_content and len(text_content.strip()) > 20:
+                        all_text_content.append(f"=== 文件: {file.filename} ===\n{text_content}")
+                        processed_files.append(file.filename)
+                    else:
+                        failed_files.append(f"{file.filename} (无法提取文本)")
+                        
+                except Exception as e:
+                    failed_files.append(f"{file.filename} (处理失败: {str(e)})")
+                    continue
+            
+            if not all_text_content:
+                return jsonify({'success': False, 'message': '没有成功处理的文件，无法生成题目'}), 400
+            
+            # 合并所有文本内容
+            combined_text = '\n\n'.join(all_text_content)
+            
+            if len(combined_text.strip()) < 100:
+                return jsonify({'success': False, 'message': '文件内容太少，无法生成题目。需要至少100个字符的文本内容。'}), 400
+            
+            print(f"成功处理{len(processed_files)}个文件，合并文本长度: {len(combined_text)}")
+            
+            # 使用AI生成题目
+            quiz_generator = QuizGenerator()
+            generated_quizzes = quiz_generator.generate_quiz(combined_text, num_questions=num_questions)
+            
+            if not generated_quizzes:
+                return jsonify({'success': False, 'message': 'AI生成题目失败，请检查文件内容或稍后重试'}), 500
+            
+            # 构建响应消息
+            message = f'成功基于{len(processed_files)}个文件生成{len(generated_quizzes)}道题目'
+            if failed_files:
+                message += f'，{len(failed_files)}个文件处理失败'
+            
+            return jsonify({
+                'success': True,
+                'message': message,
+                'questions': generated_quizzes,
+                'processed_files': processed_files,
+                'failed_files': failed_files,
+                'file_info': {
+                    'total_files': len(files),
+                    'processed_count': len(processed_files),
+                    'failed_count': len(failed_files),
+                    'combined_text_length': len(combined_text)
+                }
+            })
+            
+        except ImportError as e:
+            return jsonify({'success': False, 'message': '文件处理功能未正确配置'}), 500
+        except Exception as e:
+            print(f"多文件AI生成题目错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'处理失败: {str(e)}'}), 500
+            
+    except Exception as e:
+        print(f"多文件上传API错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': '系统错误，请重试'}), 500
+
 @quiz_bp.route('/upload', methods=['POST'])
 def upload_and_generate_quiz():
     """上传文件并生成题目（简化版API）"""

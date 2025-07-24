@@ -2,6 +2,8 @@ from app import db
 from datetime import datetime
 from enum import Enum
 from werkzeug.security import generate_password_hash, check_password_hash
+import random
+import string
 
 class UserRole(Enum):
     ORGANIZER = "organizer"
@@ -40,6 +42,7 @@ class Session(db.Model):
     description = db.Column(db.Text)
     organizer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     speaker_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    invite_code = db.Column(db.String(6), unique=True, nullable=False)  # 6位邀请码
     is_active = db.Column(db.Boolean, default=False)
     quiz_interval = db.Column(db.Integer, default=10)  # 分钟
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -48,6 +51,16 @@ class Session(db.Model):
     contents = db.relationship('Content', backref='session')
     quizzes = db.relationship('Quiz', backref='session')
     participants = db.relationship('SessionParticipant', backref='session')
+    
+    @staticmethod
+    def generate_unique_invite_code():
+        """生成唯一的6位数字邀请码"""
+        while True:
+            # 生成6位数字码
+            invite_code = ''.join(random.choices(string.digits, k=6))
+            # 检查是否已存在
+            if not Session.query.filter_by(invite_code=invite_code).first():
+                return invite_code
     
 class SessionParticipant(db.Model):
     __tablename__ = 'session_participants'
