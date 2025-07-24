@@ -221,14 +221,11 @@ function displaySessions(sessions) {
                         </span>
                         <div class="btn-group-vertical btn-group-sm">
                             <button class="btn btn-outline-primary" onclick="viewSessionDetails(${session.id})">
-                                查看详情
+                                查看详细
                             </button>
                             <button class="btn btn-outline-${session.is_active ? 'danger' : 'success'}" 
                                     onclick="toggleSessionStatus(${session.id}, ${!session.is_active})">
                                 ${session.is_active ? '停用' : '激活'}
-                            </button>
-                            <button class="btn btn-outline-info" onclick="viewStatistics(${session.id})">
-                                查看统计
                             </button>
                         </div>
                     </div>
@@ -360,7 +357,11 @@ async function toggleSessionStatus(sessionId, isActive) {
         
         if (response.ok) {
             showMessage(data.message, 'success');
-            loadSessions();
+            
+            // 立即更新页面上的会话状态显示
+            updateSessionStatusInUI(sessionId, isActive);
+            
+            // 刷新仪表板数据（但不重新加载会话列表）
             loadDashboardData();
         } else {
             showMessage(data.error || '操作失败', 'error');
@@ -370,6 +371,34 @@ async function toggleSessionStatus(sessionId, isActive) {
     }
 }
 
+// 立即更新UI中的会话状态
+function updateSessionStatusInUI(sessionId, isActive) {
+    // 查找对应的会话卡片
+    const sessionCards = document.querySelectorAll('.session-card');
+    
+    sessionCards.forEach(card => {
+        // 查找该卡片中的停用/激活按钮
+        const toggleButton = card.querySelector(`button[onclick*="toggleSessionStatus(${sessionId}"]`);
+        
+        if (toggleButton) {
+            // 找到对应的会话卡片，更新状态显示
+            const statusBadge = card.querySelector('.badge');
+            const actionButton = toggleButton;
+            
+            if (statusBadge && actionButton) {
+                // 更新状态徽章
+                statusBadge.className = `badge ${isActive ? 'bg-success' : 'bg-secondary'} mb-2`;
+                statusBadge.textContent = isActive ? '进行中' : '已结束';
+                
+                // 更新操作按钮
+                actionButton.className = `btn btn-outline-${isActive ? 'danger' : 'success'}`;
+                actionButton.textContent = isActive ? '停用' : '激活';
+                actionButton.setAttribute('onclick', `toggleSessionStatus(${sessionId}, ${!isActive})`);
+            }
+        }
+    });
+}
+
 // 查看会话详情
 async function viewSessionDetails(sessionId) {
     try {
@@ -377,6 +406,8 @@ async function viewSessionDetails(sessionId) {
         if (response.ok) {
             const data = await response.json();
             showSessionDetailsModal(data);
+        } else {
+            showMessage('加载会话详情失败', 'error');
         }
     } catch (error) {
         showMessage('加载会话详情失败', 'error');
@@ -384,12 +415,102 @@ async function viewSessionDetails(sessionId) {
 }
 
 // 显示会话详情模态框
+// 显示会话详情模态框
 function showSessionDetailsModal(sessionData) {
-    // 这里可以创建一个详情模态框
-    alert(`会话详情:\n标题: ${sessionData.title}\n描述: ${sessionData.description}\n演讲者: ${sessionData.speaker.username}\n参与人数: ${sessionData.participant_count}`);
+    // 创建详细的会话信息显示
+    const modalHtml = `
+        <div class="modal fade" id="sessionDetailsModal" tabindex="-1" aria-labelledby="sessionDetailsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="sessionDetailsModalLabel">
+                            <i class="fas fa-info-circle me-2"></i>会话详细信息
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- 基本信息 -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>基本信息</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>会话标题:</strong> ${sessionData.title}</p>
+                                        <p><strong>会话描述:</strong> ${sessionData.description || '暂无描述'}</p>
+                                        <p><strong>会话状态:</strong> 
+                                            <span class="badge ${sessionData.is_active ? 'bg-success' : 'bg-secondary'}">
+                                                ${sessionData.is_active ? '进行中' : '已结束'}
+                                            </span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>创建时间:</strong> ${new Date(sessionData.created_at).toLocaleString('zh-CN')}</p>
+                                        <p><strong>演讲者:</strong> ${sessionData.speaker.nickname || sessionData.speaker.username}</p>
+                                        <p><strong>组织者:</strong> ${sessionData.organizer.username}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 参与者信息 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-users me-2"></i>参与者信息 (${sessionData.participants.length}人)</h6>
+                            </div>
+                            <div class="card-body">
+                                ${sessionData.participants.length > 0 ? `
+                                    <div class="row">
+                                        ${sessionData.participants.map(participant => `
+                                            <div class="col-md-6 col-lg-4 mb-2">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-user-circle text-primary me-2"></i>
+                                                    <div>
+                                                        <small class="fw-bold">${participant.nickname || participant.username}</small><br>
+                                                        <small class="text-muted">加入时间: ${new Date(participant.joined_at).toLocaleString('zh-CN')}</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : '<p class="text-muted">暂无参与者</p>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        ${sessionData.is_active ? 
+                            `<button type="button" class="btn btn-danger" onclick="toggleSessionStatus(${sessionData.id}, false); bootstrap.Modal.getInstance(document.getElementById('sessionDetailsModal')).hide();">停用会话</button>` :
+                            `<button type="button" class="btn btn-success" onclick="toggleSessionStatus(${sessionData.id}, true); bootstrap.Modal.getInstance(document.getElementById('sessionDetailsModal')).hide();">激活会话</button>`
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('sessionDetailsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // 添加新的模态框到页面
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('sessionDetailsModal'));
+    modal.show();
+
+    // 模态框关闭后清理DOM
+    document.getElementById('sessionDetailsModal').addEventListener('hidden.bs.modal', function () {
+        this.remove();
+    });
 }
 
-// 查看统计信息
+// 移除以下函数，因为不再需要查看统计按钮
+/*
 async function viewStatistics(sessionId) {
     try {
         const response = await fetch(`/api/quiz/statistics/${sessionId}`);
@@ -415,6 +536,7 @@ function showStatisticsModal(statsData) {
     
     alert(statsText);
 }
+*/
 
 // 加载统计分析
 async function loadStatistics() {
@@ -465,7 +587,6 @@ async function loadSessionStatistics(sessionId) {
     }
 }
 
-// 显示统计数据
 // 显示统计数据
 function displayStatistics(data) {
     const container = document.getElementById('statisticsContent');
@@ -522,15 +643,6 @@ function displayStatistics(data) {
             </div>
         </div>
 
-        <!-- 状态说明 -->
-        <div class="alert alert-info mb-4">
-            <h6><i class="fas fa-info-circle me-2"></i>状态说明</h6>
-            <p class="mb-0">
-                <span class="badge bg-success me-2">已激活</span>题目已发送给听众，可以接收答案
-                <span class="badge bg-secondary ms-3 me-2">未激活</span>题目已创建但未发送给听众，听众无法看到和回答
-            </p>
-        </div>
-
         <!-- 题目详细统计 -->
         <div class="card">
             <div class="card-header">
@@ -541,9 +653,6 @@ function displayStatistics(data) {
 
     data.quiz_statistics.forEach((quiz, index) => {
         const accuracy = quiz.total_responses > 0 ? quiz.accuracy_rate.toFixed(1) : 0;
-        const statusBadge = quiz.is_active ? 
-            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>已激活</span>' : 
-            '<span class="badge bg-secondary"><i class="fas fa-pause me-1"></i>未激活</span>';
         
         // 格式化创建时间
         const createdDate = new Date(quiz.created_at);
@@ -571,7 +680,6 @@ function displayStatistics(data) {
                         <div class="flex-grow-1">
                             <div class="d-flex align-items-center mb-2">
                                 <span class="badge bg-primary me-2">题目 ${index + 1}</span>
-                                ${statusBadge}
                                 <span class="badge bg-info ms-2">ID: ${quiz.id}</span>
                             </div>
                             <h6 class="mb-2 text-dark">${quiz.question}</h6>
@@ -659,29 +767,8 @@ function displayStatistics(data) {
                         </div>
                     </div>
                 </div>
+            </div>
         `;
-
-        // 如果有解释，显示解释
-        if (quiz.explanation && quiz.explanation.trim()) {
-            html += `
-                <div class="quiz-explanation p-3 border-top bg-info bg-opacity-10">
-                    <h6 class="mb-2"><i class="fas fa-lightbulb me-2 text-warning"></i>题目解释</h6>
-                    <p class="mb-0 text-dark">${quiz.explanation}</p>
-                </div>
-            `;
-        }
-
-        // 如果题目未激活，显示提示
-        if (!quiz.is_active) {
-            html += `
-                <div class="quiz-inactive-notice p-3 border-top bg-secondary bg-opacity-10">
-                    <h6 class="mb-2"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>题目状态</h6>
-                    <p class="mb-0 text-muted">此题目尚未激活，听众无法看到和回答。需要演讲者在演讲者界面中发送此题目给听众。</p>
-                </div>
-            `;
-        }
-
-        html += `</div>`;
     });
 
     html += `
