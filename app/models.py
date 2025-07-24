@@ -112,7 +112,8 @@ class QuizResponse(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     answer = db.Column(db.String(1), nullable=False)  # A, B, C, D
     is_correct = db.Column(db.Boolean, nullable=False)
-    response_time = db.Column(db.DateTime, default=datetime.utcnow)
+    response_time = db.Column(db.DateTime, default=datetime.utcnow)  # 答题时间戳
+    answer_duration = db.Column(db.Float, nullable=True)  # 答题用时（秒），新增字段
     
     # 建立唯一约束
     __table_args__ = (db.UniqueConstraint('quiz_id', 'user_id'),)
@@ -132,7 +133,7 @@ class Feedback(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    feedback_type = db.Column(db.String(50), nullable=False)  # too_fast, too_slow, boring, bad_question
+    feedback_type = db.Column(db.String(50), nullable=False)  # too_fast, too_slow, boring, bad_question, environment, difficulty
     content = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

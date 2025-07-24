@@ -517,8 +517,35 @@
                 <!-- 统计分析 -->
                 <div id="analytics" class="content-section">
                     <h2 class="mb-4">统计分析</h2>
+                    
+                    <!-- 会话选择 -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-filter me-2"></i>选择会话</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="sessionSelect" class="form-label">请选择要分析的会话</label>
+                                    <select class="form-select" id="sessionSelect">
+                                        <option value="">请选择会话</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 d-flex align-items-end">
+                                    <button class="btn btn-primary" onclick="loadSelectedSessionStats()">
+                                        <i class="fas fa-chart-line me-2"></i>查看统计
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 统计结果展示区域 -->
                     <div id="analyticsContent">
-                        <!-- 统计分析内容将在这里显示 -->
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <p>请选择一个会话查看详细的统计分析</p>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1034,6 +1034,14 @@
             background: linear-gradient(135deg, #28a745, #1e7e34);
         }
 
+        .feedback-type-card[data-type="difficulty"]:not(.selected) {
+            border-color: #fd7e14;
+        }
+
+        .feedback-type-card[data-type="difficulty"].selected {
+            background: linear-gradient(135deg, #fd7e14, #e8590c);
+        }
+
         .feedback-textarea {
             border: 2px solid #e9ecef;
             border-radius: 15px;
@@ -1479,6 +1487,75 @@
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(40, 167, 69, 0.4);
         }
+
+        /* 答题结果选项显示样式 */
+        .options-display {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .option-item {
+            padding: 12px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            background: white;
+            transition: all 0.3s ease;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-align: left;
+        }
+
+        .option-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .option-item .option-content {
+            flex: 1;
+            text-align: left;
+        }
+
+        .option-item .option-icons {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        /* 正确答案样式 */
+        .option-item.correct-answer {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border-color: #28a745;
+            color: #155724;
+        }
+
+        /* 用户选择的正确答案 */
+        .option-item.user-correct {
+            background: linear-gradient(135deg, #cce7ff, #b3d9ff);
+            border-color: #007bff;
+            color: #004085;
+        }
+
+        /* 用户选择的错误答案 */
+        .option-item.user-incorrect {
+            background: linear-gradient(135deg, #f8d7da, #f1aeb5);
+            border-color: #dc3545;
+            color: #721c24;
+        }
+
+        .result-summary {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+        }
+
+        .result-summary .badge {
+            font-size: 0.9em;
+            padding: 6px 12px;
+        }
     </style>
 </head>
 <body>
@@ -1709,6 +1786,11 @@
                                                         <div class="title">环境问题</div>
                                                         <div class="description">音响或环境干扰</div>
                                                     </div>
+                                                    <div class="feedback-type-card" data-type="difficulty" onclick="selectFeedbackType(this)">
+                                                        <i class="fas fa-chart-line icon"></i>
+                                                        <div class="title">内容难度</div>
+                                                        <div class="description">内容过难或过简单</div>
+                                                    </div>
                                                 </div>
                                             </div>
                                             
@@ -1754,12 +1836,8 @@
                                             
                                             <div class="feedback-stats">
                                                 <div class="feedback-stat-item">
-                                                    <div class="feedback-stat-number">12</div>
-                                                    <div class="feedback-stat-label">今日反馈</div>
-                                                </div>
-                                                <div class="feedback-stat-item">
-                                                    <div class="feedback-stat-number">85%</div>
-                                                    <div class="feedback-stat-label">满意度</div>
+                                                    <div class="feedback-stat-number" id="sessionFeedbackCount">--</div>
+                                                    <div class="feedback-stat-label">当前会话收到反馈数</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1854,22 +1932,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- 答题历史 -->
-                                <div class="quiz-history">
-                                    <div class="d-flex align-items-center mb-3">
-                                        <h5 class="mb-0">
-                                            <i class="fas fa-history me-2"></i>答题历史
-                                        </h5>
-                                        <span class="badge bg-primary ms-2">最近记录</span>
-                                    </div>
-                                    
-                                    <div id="quizHistoryList">
-                                        <div class="text-center text-muted py-4">
-                                            <i class="fas fa-inbox fa-3x mb-3"></i>
-                                            <p>暂无答题记录</p>
-                                        </div>
-                                    </div>
-                                </div>
                                 
                                 <!-- 排行榜 -->
                                 <div class="ranking-section">
@@ -1890,25 +1952,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 加入会话确认模态框 -->
-    <div class="modal fade" id="joinSessionModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">加入会话</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>确定要加入会话 "<span id="sessionTitleToJoin"></span>" 吗？</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-success" onclick="confirmJoinSession()">确定加入</button>
                 </div>
             </div>
         </div>

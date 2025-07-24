@@ -21,13 +21,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // 统计页面会话选择事件监听器
-    const sessionSelect = document.getElementById('sessionSelect');
-    if (sessionSelect) {
-        sessionSelect.addEventListener('change', function() {
-            loadSessionStatistics(this.value);
-        });
-    }
+    // 统计页面会话选择事件监听器 - 仅重置显示，不自动加载数据
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.id === 'sessionSelect') {
+            const sessionId = e.target.value;
+            const container = document.getElementById('analyticsContent');
+            if (container) {
+                if (sessionId) {
+                    // 选择了会话，显示提示用户点击按钮
+                    container.innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <p>已选择会话，请点击"查看统计"按钮来查看详细分析</p>
+                        </div>
+                    `;
+                } else {
+                    // 未选择会话，显示默认提示
+                    container.innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <p>请选择一个会话查看详细的统计分析</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+    });
 });
 
 
@@ -86,8 +105,8 @@ function showSection(sectionId) {
             case 'speakers':
                 loadSpeakers();
                 break;
-            case 'statistics':
-                loadStatistics();
+            case 'analytics':
+                loadAnalytics();
                 break;
         }
     }
@@ -96,9 +115,14 @@ function showSection(sectionId) {
 // 加载仪表板数据
 async function loadDashboardData() {
     try {
-        const response = await fetch('/api/session/list');
-        if (response.ok) {
-            const data = await response.json();
+        // 并行加载会话数据和演讲者数据
+        const [sessionResponse, speakersResponse] = await Promise.all([
+            fetch('/api/session/list'),
+            fetch('/api/session/speakers')
+        ]);
+        
+        if (sessionResponse.ok) {
+            const data = await sessionResponse.json();
             const sessions = data.sessions;
             
             // 更新会话数量
@@ -106,8 +130,6 @@ async function loadDashboardData() {
             
             let totalParticipants = 0;
             let totalQuizzes = 0;
-            let totalResponses = 0;
-            let totalCorrect = 0;
             
             // 为每个会话获取统计数据
             const statsPromises = sessions.map(async (session) => {
@@ -120,11 +142,6 @@ async function loadDashboardData() {
                         const quizStats = statsData.quiz_statistics || [];
                         
                         totalQuizzes += quizStats.length;
-                        
-                        quizStats.forEach(quiz => {
-                            totalResponses += quiz.total_responses || 0;
-                            totalCorrect += quiz.correct_responses || 0;
-                        });
                     }
                 } catch (error) {
                     console.error(`获取会话 ${session.id} 统计失败:`, error);
@@ -138,46 +155,71 @@ async function loadDashboardData() {
             document.getElementById('totalParticipants').textContent = totalParticipants;
             document.getElementById('totalQuizzes').textContent = totalQuizzes;
             
-            // 计算平均正确率
-            const avgAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses * 100).toFixed(1) : 0;
-            document.getElementById('avgAccuracy').textContent = `${avgAccuracy}%`;
-            
             // 显示最近的会话
-            displayRecentSessions(sessions.slice(0, 5));
+            displayRecentActivities(sessions);
         }
+        
+        // 更新演讲者数量
+        if (speakersResponse.ok) {
+            const speakersData = await speakersResponse.json();
+            document.getElementById('totalSpeakers').textContent = speakersData.speakers.length;
+        }
+        
     } catch (error) {
         console.error('加载仪表板数据失败:', error);
         // 设置默认值
         document.getElementById('totalSessions').textContent = '0';
+        document.getElementById('totalSpeakers').textContent = '0';
         document.getElementById('totalParticipants').textContent = '0';
         document.getElementById('totalQuizzes').textContent = '0';
-        document.getElementById('avgAccuracy').textContent = '0%';
     }
 }
 
-// 显示最近的会话
-function displayRecentSessions(sessions) {
-    const container = document.getElementById('recentSessions');
+// 显示最近的活动
+function displayRecentActivities(sessions) {
+    const container = document.getElementById('recentActivities');
     
     if (sessions.length === 0) {
         container.innerHTML = '<p class="text-muted">暂无会话数据</p>';
         return;
     }
     
-    container.innerHTML = sessions.map(session => `
-        <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
-            <div>
-                <strong>${session.title}</strong>
-                <small class="text-muted d-block">演讲者: ${session.speaker}</small>
+    // 按创建时间排序，显示最新的5个会话
+    const sortedSessions = sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const recentSessions = sortedSessions.slice(0, 5);
+    
+    container.innerHTML = recentSessions.map(session => {
+        const createdDate = new Date(session.created_at);
+        const formattedDate = createdDate.toLocaleDateString('zh-CN', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        return `
+            <div class="d-flex justify-content-between align-items-center mb-3 p-3 border-bottom">
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center mb-2">
+                        <strong class="text-primary">${session.title}</strong>
+                        <span class="badge ${session.is_active ? 'bg-success' : 'bg-secondary'} ms-2">
+                            ${session.is_active ? '进行中' : '已结束'}
+                        </span>
+                    </div>
+                    <div class="text-muted small">
+                        <i class="fas fa-user me-1"></i>演讲者: ${session.speaker} | 
+                        <i class="fas fa-users me-1"></i>${session.participant_count || 0} 人参与 |
+                        <i class="fas fa-clock me-1"></i>${formattedDate}
+                    </div>
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewSessionDetails(${session.id})">
+                        <i class="fas fa-eye me-1"></i>查看
+                    </button>
+                </div>
             </div>
-            <div class="text-end">
-                <span class="badge ${session.is_active ? 'bg-success' : 'bg-secondary'}">
-                    ${session.is_active ? '进行中' : '已结束'}
-                </span>
-                <small class="text-muted d-block">${session.participant_count} 人参与</small>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // 加载所有会话
@@ -287,8 +329,10 @@ function displaySpeakers(speakers) {
 
 // 更新演讲者选择下拉框
 function updateSpeakerSelect(speakers) {
-    const select = document.getElementById('speakerId');
-    select.innerHTML = '<option value="">请选择演讲者</option>';
+    const select = document.getElementById('sessionSpeaker');
+    if (!select) return; // 如果元素不存在则退出
+    
+    select.innerHTML = '<option value="">选择演讲者</option>';
     
     speakers.forEach(speaker => {
         const option = document.createElement('option');
@@ -302,7 +346,7 @@ function updateSpeakerSelect(speakers) {
 async function createSession() {
     const title = document.getElementById('sessionTitle').value;
     const description = document.getElementById('sessionDescription').value;
-    const speakerId = document.getElementById('speakerId').value;
+    const speakerId = document.getElementById('sessionSpeaker').value;
     
     if (!title || !speakerId) {
         showMessage('请填写所有必填字段', 'error');
@@ -602,12 +646,12 @@ function showStatisticsModal(statsData) {
 */
 
 // 加载统计分析
-async function loadStatistics() {
+async function loadAnalytics() {
     try {
         const response = await fetch('/api/session/list');
         if (response.ok) {
             const data = await response.json();
-            updateStatsSessionSelect(data.sessions);
+            updateAnalyticsSessionSelect(data.sessions);
         }
     } catch (error) {
         console.error('加载统计失败:', error);
@@ -616,9 +660,11 @@ async function loadStatistics() {
 }
 
 // 更新统计页面的会话选择下拉框
-function updateStatsSessionSelect(sessions) {
+function updateAnalyticsSessionSelect(sessions) {
     const select = document.getElementById('sessionSelect');
-    select.innerHTML = '<option value="">选择会话</option>';
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">请选择会话</option>';
     
     sessions.forEach(session => {
         const option = document.createElement('option');
@@ -626,6 +672,19 @@ function updateStatsSessionSelect(sessions) {
         option.textContent = `${session.title} (${session.is_active ? '进行中' : '已结束'})`;
         select.appendChild(option);
     });
+}
+
+// 加载选中会话的统计数据
+async function loadSelectedSessionStats() {
+    const sessionSelect = document.getElementById('sessionSelect');
+    const sessionId = sessionSelect.value;
+    
+    if (!sessionId) {
+        showMessage('请先选择一个会话', 'warning');
+        return;
+    }
+    
+    await loadSessionStatistics(sessionId);
 }
 
 // 加载会话统计数据
@@ -652,10 +711,16 @@ async function loadSessionStatistics(sessionId) {
 
 // 显示统计数据
 function displayStatistics(data) {
-    const container = document.getElementById('statisticsContent');
+    const container = document.getElementById('analyticsContent');
     
     if (!data.quiz_statistics || data.quiz_statistics.length === 0) {
-        container.innerHTML = '<div class="text-center text-muted py-5">该会话暂无题目统计数据</div>';
+        container.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                <h5>该会话暂无题目统计数据</h5>
+                <p>请确保该会话已经创建了题目并有用户参与答题</p>
+            </div>
+        `;
         return;
     }
 
@@ -903,4 +968,26 @@ function fallbackCopyTextToClipboard(text) {
     }
     
     document.body.removeChild(textArea);
+}
+
+// 退出登录
+async function logout() {
+    try {
+        const response = await fetch('/api/auth/logout', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showMessage('已成功退出', 'success');
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 1000);
+        } else {
+            showMessage('退出失败', 'error');
+        }
+    } catch (error) {
+        console.error('退出失败:', error);
+        // 即使请求失败，也跳转到登录页面
+        window.location.href = '/login';
+    }
 }

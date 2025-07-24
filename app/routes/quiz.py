@@ -3,6 +3,7 @@ from app import db
 from app.models import Quiz, QuizResponse, QuizDiscussion, Content, Session as PQSession, Feedback, UserQuizProgress, User
 from app.routes.auth import require_auth
 from datetime import datetime
+import random
 
 quiz_bp = Blueprint('quiz', __name__)
 
@@ -158,6 +159,95 @@ def activate_quiz():
         db.session.rollback()
         return jsonify({'error': f'激活题目失败: {str(e)}'}), 500
 
+@quiz_bp.route('/skip/<int:quiz_id>', methods=['POST'])
+@require_auth
+def skip_quiz(quiz_id):
+    """跳过当前题目到下一题"""
+    try:
+        user_id = session['user_id']
+        quiz = Quiz.query.get(quiz_id)
+        if not quiz:
+            return jsonify({'success': False, 'error': '题目不存在'}), 404
+        
+        # 检查是否已经有答题记录
+        existing_response = QuizResponse.query.filter_by(
+            quiz_id=quiz_id,
+            user_id=user_id
+        ).first()
+        
+        if not existing_response:
+            # 创建一个"未答题"的记录，用特殊答案"X"标识
+            timeout_response = QuizResponse(
+                quiz_id=quiz_id,
+                user_id=user_id,
+                answer='X',  # 特殊标记：未答题
+                is_correct=False,
+                answer_duration=20.0  # 默认20秒（超时时间）
+            )
+            db.session.add(timeout_response)
+        
+        # 获取用户进度
+        user_progress = UserQuizProgress.query.filter_by(
+            user_id=user_id,
+            session_id=quiz.session_id
+        ).first()
+        
+        if not user_progress:
+            return jsonify({'success': False, 'error': '进度记录不存在'}), 404
+        
+        # 获取该会话的所有题目
+        all_quizzes = Quiz.query.filter_by(session_id=quiz.session_id).order_by(Quiz.created_at.asc()).all()
+        
+        # 推进到下一题
+        if user_progress.current_quiz_index < len(all_quizzes) - 1:
+            user_progress.current_quiz_index += 1
+            user_progress.last_activity = datetime.utcnow()
+            db.session.commit()
+            return jsonify({'success': True, 'message': '已跳过到下一题'})
+        else:
+            # 最后一题，标记为完成
+            user_progress.is_completed = True
+            user_progress.last_activity = datetime.utcnow()
+            db.session.commit()
+            return jsonify({'success': True, 'message': '已完成所有题目', 'completed': True})
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'跳过失败: {str(e)}'}), 500
+
+@quiz_bp.route('/user-completion-status/<int:session_id>', methods=['GET'])
+@require_auth
+def get_user_completion_status(session_id):
+    """获取用户在指定会话中的答题完成状态"""
+    try:
+        user_id = session['user_id']
+        
+        # 获取用户进度
+        user_progress = UserQuizProgress.query.filter_by(
+            user_id=user_id,
+            session_id=session_id
+        ).first()
+        
+        if not user_progress:
+            return jsonify({
+                'success': True,
+                'completed': False,
+                'message': '用户尚未开始答题'
+            })
+        
+        return jsonify({
+            'success': True,
+            'completed': user_progress.is_completed,
+            'current_quiz_index': user_progress.current_quiz_index,
+            'last_activity': user_progress.last_activity.isoformat() if user_progress.last_activity else None
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'获取完成状态失败: {str(e)}'
+        }), 500
+
 @quiz_bp.route('/answer', methods=['POST'])
 @require_auth
 def submit_answer():
@@ -170,6 +260,7 @@ def submit_answer():
     quiz_id = data['quiz_id']
     answer = data['answer'].upper()
     user_id = session['user_id']
+    answer_duration = data.get('answer_duration')  # 答题用时（秒）
     
     if answer not in ['A', 'B', 'C', 'D']:
         return jsonify({'error': '答案格式错误'}), 400
@@ -208,7 +299,8 @@ def submit_answer():
             quiz_id=quiz_id,
             user_id=user_id,
             answer=answer,
-            is_correct=is_correct
+            is_correct=is_correct,
+            answer_duration=answer_duration  # 保存答题用时
         )
         
         db.session.add(response)
@@ -466,19 +558,48 @@ def get_user_quiz_stats(session_id):
     ).all()
     
     total_answered = len(user_responses)
-    correct_answered = sum(1 for r in user_responses if r.is_correct)
-    accuracy = (correct_answered / total_answered * 100) if total_answered > 0 else 0
+    # 正确答案数量：排除未答题的记录（答案为'X'）
+    correct_answered = sum(1 for r in user_responses if r.is_correct and r.answer != 'X')
+    # 实际回答的题目数量：排除未答题的记录
+    actually_answered = sum(1 for r in user_responses if r.answer != 'X')
+    # 正确率计算：基于总题目数量，包含未答题的惩罚
+    accuracy = (correct_answered / total_quizzes * 100) if total_quizzes > 0 else 0
+    
+    # 计算平均用时 - 考虑未答题的情况
+    avg_time = None
+    if total_quizzes > 0:  # 如果会话有题目
+        # 已回答题目的总用时
+        answered_duration = 0
+        answered_count_with_duration = 0
+        
+        for response in user_responses:
+            if response.answer_duration is not None:
+                answered_duration += response.answer_duration
+                answered_count_with_duration += 1
+            else:
+                # 没有用时数据的旧回答，估算为25秒
+                answered_duration += 25
+                answered_count_with_duration += 1
+        
+        # 未答题数量（默认每题20秒）
+        unanswered_count = total_quizzes - total_answered
+        unanswered_duration = unanswered_count * 20
+        
+        # 计算总平均用时
+        total_duration = answered_duration + unanswered_duration
+        avg_time = round(total_duration / total_quizzes, 1) if total_quizzes > 0 else None
     
     # 计算排名 - 获取所有用户的统计数据和用户信息
     all_user_stats = db.session.query(
         QuizResponse.user_id,
         db.func.count(QuizResponse.id).label('total'),
-        db.func.sum(db.case((QuizResponse.is_correct == True, 1), else_=0)).label('correct')
+        db.func.sum(db.case((QuizResponse.is_correct == True, 1), else_=0)).label('correct'),
+        db.func.sum(db.case((QuizResponse.answer != 'X', 1), else_=0)).label('actually_answered')  # 实际回答数
     ).join(Quiz).filter(Quiz.session_id == session_id).group_by(QuizResponse.user_id).all()
     
-    # 按正确率排序，然后按答题数量排序
+    # 按正确率排序，然后按答题数量排序（基于用户遇到的题目数计算正确率）
     sorted_stats = sorted(all_user_stats, 
-                         key=lambda x: (x.correct / x.total if x.total > 0 else 0, x.total), 
+                         key=lambda x: (x.correct / x.total if x.total > 0 else 0, x.actually_answered), 
                          reverse=True)
     
     user_rank = next((i + 1 for i, stat in enumerate(sorted_stats) if stat.user_id == user_id), None)
@@ -492,7 +613,7 @@ def get_user_quiz_stats(session_id):
             'user_id': stat.user_id,
             'username': user_info.username if user_info else f'User{stat.user_id}',
             'nickname': user_info.nickname if user_info and hasattr(user_info, 'nickname') else None,
-            'total_answered': stat.total,
+            'total_answered': stat.actually_answered,  # 使用实际回答数
             'correct_answered': stat.correct,
             'accuracy': round(user_accuracy, 1),
             'is_current_user': stat.user_id == user_id
@@ -502,9 +623,11 @@ def get_user_quiz_stats(session_id):
         'user_id': user_id,
         'session_id': session_id,
         'total_quizzes': total_quizzes,
-        'total_answered': total_answered,
+        'total_answered': total_answered,  # 包含未答题的总记录数
+        'actually_answered': actually_answered,  # 实际回答的题目数
         'correct_answered': correct_answered,
         'accuracy': round(accuracy, 1),
+        'avg_time': avg_time,
         'rank': user_rank,
         'total_participants': len(sorted_stats),
         'leaderboard': leaderboard
@@ -558,7 +681,9 @@ def get_session_quiz_sequence(session_id):
             
             # 添加用户回答信息
             if user_response:
-                answered_count += 1
+                # 只有真实回答的题目才计入已回答数（排除超时未答的'X'）
+                if user_response.answer != 'X':
+                    answered_count += 1
                 if user_response.is_correct:
                     correct_count += 1
                 quiz_data['user_response'] = {
@@ -623,6 +748,21 @@ def submit_feedback():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'提交反馈失败: {str(e)}'}), 500
+
+@quiz_bp.route('/feedback-stats/<int:session_id>', methods=['GET'])
+def get_feedback_stats(session_id):
+    """获取会话反馈统计"""
+    try:
+        # 获取当前会话的反馈总数
+        feedback_count = Feedback.query.filter_by(session_id=session_id).count()
+        
+        return jsonify({
+            'session_id': session_id,
+            'feedback_count': feedback_count
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'获取反馈统计失败: {str(e)}'}), 500
 
 @quiz_bp.route('/generate-ai-quizzes', methods=['POST'])
 @require_auth

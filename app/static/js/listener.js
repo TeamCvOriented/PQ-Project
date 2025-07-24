@@ -4,6 +4,7 @@ let currentQuizId = null;
 let selectedFeedbackType = null;
 let quizTimer = null;
 let timeLeft = 0;
+let quizStartTime = null; // 记录开始答题的时间
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -85,10 +86,23 @@ async function loadSavedSession() {
                     currentSessionId = activeSession.id;
                     showMessage(`已自动连接到会话: ${activeSession.title}`, 'info');
                     
+                    // 加载反馈统计
+                    loadFeedbackStats();
+                    
                     // 切换到当前题目页面
                     showSection('quiz');
                     document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
                     document.querySelector('[data-section="quiz"]').classList.add('active');
+                    
+                    // 启用导航
+                    enableNavigation();
+                    
+                    // 显示当前会话信息
+                    document.getElementById('currentSessionInfo').style.display = 'block';
+                    document.getElementById('currentSessionTitle').textContent = activeSession.title;
+                    
+                    // 检查用户是否已完成答题
+                    await checkUserQuizCompletionStatus(activeSession.id);
                     
                     // 检查当前题目
                     checkCurrentQuiz();
@@ -97,6 +111,32 @@ async function loadSavedSession() {
         }
     } catch (error) {
         console.error('加载保存的会话失败:', error);
+    }
+}
+
+// 检查用户答题完成状态
+async function checkUserQuizCompletionStatus(sessionId) {
+    try {
+        const response = await fetch(`/api/quiz/user-completion-status/${sessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.completed) {
+                console.log('用户已完成所有题目，显示完成状态功能');
+                // 显示答题完成后的功能访问区域
+                const postQuizActions = document.getElementById('postQuizActions');
+                if (postQuizActions) {
+                    postQuizActions.style.display = 'block';
+                }
+                
+                // 启用结果和讨论导航
+                const resultsNavItem = document.getElementById('resultsNavItem');
+                const discussionsNavItem = document.getElementById('discussionsNavItem');
+                if (resultsNavItem) resultsNavItem.style.display = 'block';
+                if (discussionsNavItem) discussionsNavItem.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        console.error('检查答题完成状态失败:', error);
     }
 }
 
@@ -181,25 +221,56 @@ function showSection(sectionName) {
 }
 
 // 检查是否已完成答题
-function hasCompletedQuiz() {
+async function hasCompletedQuiz() {
+    if (!currentSessionId) return false;
+    
     // 检查是否显示了答题完成后的功能访问区域
     const postQuizActions = document.getElementById('postQuizActions');
-    return postQuizActions && postQuizActions.style.display !== 'none';
+    if (postQuizActions && postQuizActions.style.display !== 'none') {
+        return true;
+    }
+    
+    // 如果前端状态不准确，调用后端API确认
+    try {
+        const response = await fetch(`/api/quiz/user-completion-status/${currentSessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.completed) {
+                // 更新前端状态
+                if (postQuizActions) {
+                    postQuizActions.style.display = 'block';
+                }
+                // 启用结果和讨论导航
+                const resultsNavItem = document.getElementById('resultsNavItem');
+                const discussionsNavItem = document.getElementById('discussionsNavItem');
+                if (resultsNavItem) resultsNavItem.style.display = 'block';
+                if (discussionsNavItem) discussionsNavItem.style.display = 'block';
+                return true;
+            }
+        }
+    } catch (error) {
+        console.error('检查完成状态失败:', error);
+    }
+    
+    return false;
 }
 
 // 加载可用的会话列表
 async function loadAvailableSessions() {
     try {
-        const response = await fetch('/api/session/list');
+        const response = await fetch('/api/session/my-sessions');
         if (response.ok) {
             const data = await response.json();
             displayAvailableSessions(data.sessions || []);
         } else {
-            showMessage('加载会话列表失败', 'error');
+            console.error('加载我的会话失败:', response.status);
+            // 不显示错误消息，因为用户可能还没有参与任何会话
+            displayAvailableSessions([]);
         }
     } catch (error) {
         console.error('加载会话列表失败:', error);
-        showMessage('网络错误，请稍后重试', 'error');
+        // 不显示错误消息，静默处理
+        displayAvailableSessions([]);
     }
 }
 
@@ -211,11 +282,11 @@ function displayAvailableSessions(sessions) {
         container.innerHTML = `
             <div class="text-center">
                 <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
-                <h4>暂无可加入的会话</h4>
-                <p class="text-muted">请等待组织者创建新的会话</p>
+                <h4>暂无已加入的会话</h4>
+                <p class="text-muted">您还没有参与任何会话，请使用邀请码加入会话</p>
                 <div class="mt-3">
                     <button class="btn btn-primary" onclick="showJoinByCodeModal()">
-                        <i class="fas fa-key me-2"></i>通过邀请码加入
+                        <i class="fas fa-key me-2"></i>通过邀请码加入会话
                     </button>
                 </div>
             </div>
@@ -231,32 +302,28 @@ function displayAvailableSessions(sessions) {
                         <h5 class="card-title">${session.title}</h5>
                         <p class="card-text text-muted">${session.description || '暂无描述'}</p>
                         <small class="text-muted">
-                            <i class="fas fa-user me-1"></i>演讲者: ${session.speaker || '未指定'}
+                            <i class="fas fa-user me-1"></i>演讲者: ${session.speaker || '未指定'} |
+                            <i class="fas fa-calendar me-1"></i>加入时间: ${new Date(session.joined_at).toLocaleDateString('zh-CN')}
                         </small>
                     </div>
                     <div class="text-end">
                         <span class="badge bg-${session.is_active ? 'success' : 'secondary'} mb-2">
-                            ${session.is_active ? '进行中' : '未开始'}
+                            ${session.is_active ? '进行中' : '已结束'}
                         </span>
                         <br>
                         <small class="text-muted">
-                            <i class="fas fa-calendar me-1"></i>
-                            ${new Date(session.created_at).toLocaleDateString()}
+                            <i class="fas fa-users me-1"></i>
+                            ${session.participant_count || 0} 人参与
                         </small>
                     </div>
                 </div>
                 <div class="mt-3">
-                    ${session.is_participant ? 
-                        `<button class="btn btn-success btn-sm me-2" onclick="selectSession(${session.id}, '${session.title}')">
-                            <i class="fas fa-play me-1"></i>进入会话
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="leaveSession(${session.id})">
-                            <i class="fas fa-sign-out-alt me-1"></i>离开会话
-                        </button>` :
-                        `<button class="btn btn-primary btn-sm" onclick="showJoinSessionModal(${session.id}, '${session.title}')">
-                            <i class="fas fa-sign-in-alt me-1"></i>加入会话
-                        </button>`
-                    }
+                    <button class="btn btn-success btn-sm me-2" onclick="selectSession(${session.id}, '${session.title}')">
+                        <i class="fas fa-play me-1"></i>进入会话
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="leaveSession(${session.id})">
+                        <i class="fas fa-sign-out-alt me-1"></i>离开会话
+                    </button>
                 </div>
             </div>
         </div>
@@ -266,53 +333,10 @@ function displayAvailableSessions(sessions) {
     container.innerHTML += `
         <div class="text-center mt-4">
             <button class="btn btn-outline-primary" onclick="showJoinByCodeModal()">
-                <i class="fas fa-key me-2"></i>通过邀请码加入会话
+                <i class="fas fa-key me-2"></i>通过邀请码加入新会话
             </button>
         </div>
     `;
-}
-
-// 显示加入会话确认模态框
-function showJoinSessionModal(sessionId, sessionTitle) {
-    document.getElementById('sessionTitleToJoin').textContent = sessionTitle;
-    document.getElementById('joinSessionModal').setAttribute('data-session-id', sessionId);
-    new bootstrap.Modal(document.getElementById('joinSessionModal')).show();
-}
-
-// 确认加入会话
-async function confirmJoinSession() {
-    const modal = document.getElementById('joinSessionModal');
-    const sessionId = modal.getAttribute('data-session-id');
-    
-    try {
-        const response = await fetch(`/api/session/${sessionId}/join`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            currentSessionId = parseInt(sessionId);
-            showMessage('成功加入会话！', 'success');
-            bootstrap.Modal.getInstance(modal).hide();
-            
-            // 切换到当前题目页面
-            showSection('quiz');
-            document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
-            document.querySelector('[data-section="quiz"]').classList.add('active');
-            
-            // 开始检查当前题目
-            checkCurrentQuiz();
-        } else {
-            showMessage(data.error || '加入会话失败', 'error');
-        }
-    } catch (error) {
-        console.error('加入会话失败:', error);
-        showMessage('网络错误，请稍后重试', 'error');
-    }
 }
 
 // 检查当前活跃的题目
@@ -375,6 +399,7 @@ function displayCurrentQuiz(quiz, hasAnswered) {
     }
     
     isAnsweringQuiz = true; // 开始答题状态
+    quizStartTime = Date.now(); // 记录开始答题的时间
     
     // 显示题目
     container.innerHTML = `
@@ -485,13 +510,15 @@ function startTimer(seconds) {
             }
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
             
-            showMessage('答题时间已到', 'warning');
+            showMessage('答题时间已到，自动跳到下一题', 'warning');
+            isAnsweringQuiz = false; // 结束答题状态
+            quizStartTime = null; // 清除开始时间
             
-            // 3秒后自动检查下一题
+            // 立即自动提交空答案或直接切换到下一题
             setTimeout(() => {
-                console.log('时间到，检查下一题');
-                checkForNextQuiz();
-            }, 3000);
+                console.log('时间到，自动切换到下一题');
+                autoSkipToNextQuiz();
+            }, 2000);
         }
     }, 1000);
 }
@@ -514,6 +541,13 @@ async function submitAnswer() {
     
     const answer = selectedOption.getAttribute('data-answer');
     
+    // 计算答题用时（秒）
+    let answerDuration = null;
+    if (quizStartTime) {
+        answerDuration = (Date.now() - quizStartTime) / 1000; // 转换为秒
+        answerDuration = Math.round(answerDuration * 10) / 10; // 保留一位小数
+    }
+    
     // 禁用提交按钮防止重复提交
     const submitBtn = document.getElementById('submitAnswerBtn');
     if (submitBtn) {
@@ -529,7 +563,8 @@ async function submitAnswer() {
             },
             body: JSON.stringify({
                 quiz_id: currentQuizId,
-                answer: answer
+                answer: answer,
+                answer_duration: answerDuration
             })
         });
         
@@ -545,6 +580,7 @@ async function submitAnswer() {
                 // 正常提交成功
                 showMessage('答案提交成功！', 'success');
                 isAnsweringQuiz = false; // 结束答题状态
+                quizStartTime = null; // 清除开始时间
                 
                 // 清除计时器
                 if (quizTimer) {
@@ -655,6 +691,12 @@ function displayCompletionMessage() {
         postQuizActions.style.display = 'block';
     }
     
+    // 启用结果和讨论导航
+    const resultsNavItem = document.getElementById('resultsNavItem');
+    const discussionsNavItem = document.getElementById('discussionsNavItem');
+    if (resultsNavItem) resultsNavItem.style.display = 'block';
+    if (discussionsNavItem) discussionsNavItem.style.display = 'block';
+    
     // 清除计时器
     if (quizTimer) {
         clearInterval(quizTimer);
@@ -668,28 +710,72 @@ function displayAlreadyAnsweredResult(data) {
     const container = document.getElementById('quizContent');
     isAnsweringQuiz = false; // 结束答题状态
     
+    // 检查是否是未答题状态
+    const isTimeout = data.user_answer === 'X';
+    
     container.innerHTML = `
         <div class="quiz-card card">
-            <div class="card-header bg-info text-white">
+            <div class="card-header ${isTimeout ? 'bg-warning text-dark' : 'bg-info text-white'}">
                 <h5>
-                    <i class="fas fa-info-circle me-2"></i>
-                    您已回答过此题
+                    <i class="fas fa-${isTimeout ? 'clock' : 'info-circle'} me-2"></i>
+                    ${isTimeout ? '此题答题超时' : '您已回答过此题'}
                 </h5>
             </div>
             <div class="card-body">
                 <h4 class="mb-3">${data.quiz ? data.quiz.question : '题目'}</h4>
                 
+                ${data.quiz ? `
+                <!-- 显示所有选项 -->
                 <div class="mb-3">
-                    <p><strong>您的答案：</strong> 
-                        <span class="badge bg-${data.is_correct ? 'success' : 'danger'}">${data.user_answer}</span>
+                    <h6><strong>选项：</strong></h6>
+                    <div class="options-display">
+                        <div class="option-item ${!isTimeout && data.user_answer === 'A' ? (data.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${data.correct_answer === 'A' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>A.</strong> ${data.quiz.option_a}
+                            </div>
+                            <div class="option-icons">
+                                ${!isTimeout && data.user_answer === 'A' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${data.correct_answer === 'A' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                        <div class="option-item ${!isTimeout && data.user_answer === 'B' ? (data.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${data.correct_answer === 'B' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>B.</strong> ${data.quiz.option_b}
+                            </div>
+                            <div class="option-icons">
+                                ${!isTimeout && data.user_answer === 'B' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${data.correct_answer === 'B' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                        <div class="option-item ${!isTimeout && data.user_answer === 'C' ? (data.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${data.correct_answer === 'C' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>C.</strong> ${data.quiz.option_c}
+                            </div>
+                            <div class="option-icons">
+                                ${!isTimeout && data.user_answer === 'C' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${data.correct_answer === 'C' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                        <div class="option-item ${!isTimeout && data.user_answer === 'D' ? (data.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${data.correct_answer === 'D' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>D.</strong> ${data.quiz.option_d}
+                            </div>
+                            <div class="option-icons">
+                                ${!isTimeout && data.user_answer === 'D' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${data.correct_answer === 'D' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <!-- 结果总结 -->
+                <div class="result-summary mb-3">
+                    <p class="mb-1"><strong>您的答案：</strong> 
+                        <span class="badge bg-${isTimeout ? 'warning text-dark' : (data.is_correct ? 'success' : 'danger')}">${isTimeout ? '未答题（超时）' : data.user_answer}</span>
                     </p>
-                    <p><strong>正确答案：</strong> 
+                    <p class="mb-1"><strong>正确答案：</strong> 
                         <span class="badge bg-success">${data.correct_answer}</span>
-                    </p>
-                    <p><strong>结果：</strong> 
-                        <span class="badge bg-${data.is_correct ? 'success' : 'danger'}">
-                            ${data.is_correct ? '正确' : '错误'}
-                        </span>
                     </p>
                 </div>
                 
@@ -727,6 +813,58 @@ function displayAlreadyAnsweredResult(data) {
     }, 2000);
 }
 
+// 自动跳过到下一题（时间到时调用）
+async function autoSkipToNextQuiz() {
+    if (!currentSessionId || !currentQuizId) {
+        console.log('没有当前会话或题目，无法自动跳过');
+        return;
+    }
+    
+    try {
+        // 显示跳过状态
+        const container = document.getElementById('quizContent');
+        container.innerHTML = `
+            <div class="text-center waiting-animation">
+                <i class="fas fa-forward fa-3x text-warning mb-3"></i>
+                <h4>时间到，自动跳过</h4>
+                <p class="text-muted">正在加载下一题...</p>
+                <div class="spinner-border text-primary mt-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+        
+        // 请求跳过当前题目到下一题
+        const response = await fetch(`/api/quiz/skip/${currentQuizId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                console.log('自动跳过成功，检查下一题');
+                // 等待1秒后检查下一题
+                setTimeout(() => {
+                    checkForNextQuiz();
+                }, 1000);
+            } else {
+                console.log('跳过失败，尝试直接检查下一题');
+                checkForNextQuiz();
+            }
+        } else {
+            console.log('跳过请求失败，尝试直接检查下一题');
+            checkForNextQuiz();
+        }
+    } catch (error) {
+        console.error('自动跳过失败:', error);
+        // 如果跳过API失败，直接检查下一题
+        checkForNextQuiz();
+    }
+}
+
 // 跳过当前题目
 function skipCurrentQuiz() {
     showMessage('已跳过当前题目，等待新题目...', 'info');
@@ -755,11 +893,57 @@ function displayAnswerResult(result) {
             <div class="card-body">
                 <h4 class="mb-3">${result.quiz ? result.quiz.question : '题目'}</h4>
                 
+                ${result.quiz ? `
+                <!-- 显示所有选项 -->
                 <div class="mb-3">
-                    <p><strong>您的答案：</strong> 
+                    <h6><strong>选项：</strong></h6>
+                    <div class="options-display">
+                        <div class="option-item ${result.user_answer === 'A' ? (result.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${result.correct_answer === 'A' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>A.</strong> ${result.quiz.option_a}
+                            </div>
+                            <div class="option-icons">
+                                ${result.user_answer === 'A' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${result.correct_answer === 'A' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                        <div class="option-item ${result.user_answer === 'B' ? (result.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${result.correct_answer === 'B' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>B.</strong> ${result.quiz.option_b}
+                            </div>
+                            <div class="option-icons">
+                                ${result.user_answer === 'B' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${result.correct_answer === 'B' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                        <div class="option-item ${result.user_answer === 'C' ? (result.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${result.correct_answer === 'C' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>C.</strong> ${result.quiz.option_c}
+                            </div>
+                            <div class="option-icons">
+                                ${result.user_answer === 'C' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${result.correct_answer === 'C' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                        <div class="option-item ${result.user_answer === 'D' ? (result.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${result.correct_answer === 'D' ? 'correct-answer' : ''}">
+                            <div class="option-content">
+                                <strong>D.</strong> ${result.quiz.option_d}
+                            </div>
+                            <div class="option-icons">
+                                ${result.user_answer === 'D' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                ${result.correct_answer === 'D' ? '<i class="fas fa-check text-success"></i>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <!-- 结果总结 -->
+                <div class="result-summary mb-3">
+                    <p class="mb-1"><strong>您的答案：</strong> 
                         <span class="badge bg-${result.is_correct ? 'success' : 'danger'}">${result.user_answer}</span>
                     </p>
-                    <p><strong>正确答案：</strong> 
+                    <p class="mb-0"><strong>正确答案：</strong> 
                         <span class="badge bg-success">${result.correct_answer}</span>
                     </p>
                 </div>
@@ -892,14 +1076,70 @@ function displayResults(data) {
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">题目 ${index + 1}: ${quiz.question}</h6>
                         <span class="badge bg-${quiz.has_answered ? (quiz.is_correct ? 'success' : 'danger') : 'secondary'}">
-                            ${quiz.has_answered ? (quiz.is_correct ? '正确' : '错误') : '未答'}
+                            ${quiz.has_answered ? (quiz.is_correct ? '✓ 正确' : '✗ 错误') : '未答'}
                         </span>
                     </div>
                     ${quiz.has_answered ? `
                         <div class="card-body">
-                            <p><strong>您的答案：</strong> ${quiz.user_answer}</p>
-                            <p><strong>正确答案：</strong> ${quiz.correct_answer}</p>
-                            ${quiz.explanation ? `<p><strong>解释：</strong> ${quiz.explanation}</p>` : ''}
+                            <!-- 显示所有选项 -->
+                            <div class="mb-3">
+                                <h6><strong>选项：</strong></h6>
+                                <div class="options-display">
+                                    <div class="option-item ${quiz.user_answer === 'A' ? (quiz.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${quiz.correct_answer === 'A' ? 'correct-answer' : ''}">
+                                        <div class="option-content">
+                                            <strong>A.</strong> ${quiz.option_a}
+                                        </div>
+                                        <div class="option-icons">
+                                            ${quiz.user_answer === 'A' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                            ${quiz.correct_answer === 'A' ? '<i class="fas fa-check text-success"></i>' : ''}
+                                        </div>
+                                    </div>
+                                    <div class="option-item ${quiz.user_answer === 'B' ? (quiz.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${quiz.correct_answer === 'B' ? 'correct-answer' : ''}">
+                                        <div class="option-content">
+                                            <strong>B.</strong> ${quiz.option_b}
+                                        </div>
+                                        <div class="option-icons">
+                                            ${quiz.user_answer === 'B' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                            ${quiz.correct_answer === 'B' ? '<i class="fas fa-check text-success"></i>' : ''}
+                                        </div>
+                                    </div>
+                                    <div class="option-item ${quiz.user_answer === 'C' ? (quiz.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${quiz.correct_answer === 'C' ? 'correct-answer' : ''}">
+                                        <div class="option-content">
+                                            <strong>C.</strong> ${quiz.option_c}
+                                        </div>
+                                        <div class="option-icons">
+                                            ${quiz.user_answer === 'C' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                            ${quiz.correct_answer === 'C' ? '<i class="fas fa-check text-success"></i>' : ''}
+                                        </div>
+                                    </div>
+                                    <div class="option-item ${quiz.user_answer === 'D' ? (quiz.is_correct ? 'user-correct' : 'user-incorrect') : ''} ${quiz.correct_answer === 'D' ? 'correct-answer' : ''}">
+                                        <div class="option-content">
+                                            <strong>D.</strong> ${quiz.option_d}
+                                        </div>
+                                        <div class="option-icons">
+                                            ${quiz.user_answer === 'D' ? '<i class="fas fa-user text-primary"></i>' : ''}
+                                            ${quiz.correct_answer === 'D' ? '<i class="fas fa-check text-success"></i>' : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 结果总结 -->
+                            <div class="result-summary mb-3">
+                                <p class="mb-1"><strong>您的答案：</strong> 
+                                    <span class="badge bg-${quiz.is_correct ? 'success' : 'danger'}">${quiz.user_answer}</span>
+                                </p>
+                                <p class="mb-1"><strong>正确答案：</strong> 
+                                    <span class="badge bg-success">${quiz.correct_answer}</span>
+                                </p>
+                            </div>
+                            
+                            ${quiz.explanation ? `
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-lightbulb me-2"></i>解释</h6>
+                                    <p class="mb-0">${quiz.explanation}</p>
+                                </div>
+                            ` : ''}
                         </div>
                     ` : ''}
                 </div>
@@ -1278,7 +1518,7 @@ async function submitFeedback() {
     const feedbackContent = document.getElementById('feedbackContent').value.trim();
     
     try {
-        const response = await fetch('/api/feedback/submit', {
+        const response = await fetch('/api/quiz/feedback', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1300,6 +1540,9 @@ async function submitFeedback() {
             });
             selectedFeedbackType = null;
             
+            // 更新反馈统计
+            loadFeedbackStats();
+            
             // 添加提交成功的视觉反馈
             const submitBtn = document.querySelector('.feedback-submit-btn');
             const originalText = submitBtn.innerHTML;
@@ -1318,6 +1561,28 @@ async function submitFeedback() {
     } catch (error) {
         console.error('提交反馈失败:', error);
         showMessage('网络错误，请稍后重试', 'error');
+    }
+}
+
+// 加载反馈统计
+async function loadFeedbackStats() {
+    if (!currentSessionId) {
+        document.getElementById('sessionFeedbackCount').textContent = '--';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/quiz/feedback-stats/${currentSessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('sessionFeedbackCount').textContent = data.feedback_count || 0;
+        } else {
+            console.error('加载反馈统计失败');
+            document.getElementById('sessionFeedbackCount').textContent = '--';
+        }
+    } catch (error) {
+        console.error('加载反馈统计失败:', error);
+        document.getElementById('sessionFeedbackCount').textContent = '--';
     }
 }
 
@@ -1352,9 +1617,23 @@ async function refreshStatistics() {
 function displayStatistics(data) {
     // 更新统计数据
     document.getElementById('accuracyRate').textContent = data.accuracy ? `${data.accuracy.toFixed(1)}%` : '--';
-    document.getElementById('totalQuestions').textContent = data.total_answered || '--';
+    document.getElementById('totalQuestions').textContent = data.total_quizzes || '--';  // 使用总题数
     document.getElementById('correctAnswers').textContent = data.correct_answered || '--';
-    document.getElementById('avgTime').textContent = data.avg_time ? `${data.avg_time}s` : '--';
+    
+    // 优化平均用时显示
+    let avgTimeText = '--';
+    if (data.avg_time) {
+        if (data.avg_time >= 60) {
+            // 超过60秒，显示分钟和秒
+            const minutes = Math.floor(data.avg_time / 60);
+            const seconds = Math.round(data.avg_time % 60);
+            avgTimeText = `${minutes}分${seconds}秒`;
+        } else {
+            // 少于60秒，只显示秒
+            avgTimeText = `${data.avg_time}秒`;
+        }
+    }
+    document.getElementById('avgTime').textContent = avgTimeText;
     
     // 更新正确率卡片样式
     const accuracyCard = document.querySelector('.stats-card.accuracy-excellent');
@@ -1394,7 +1673,7 @@ function displayStatistics(data) {
             progressCircle.classList.add('good');
             performanceBadge.className = 'badge bg-info';
             performanceBadge.textContent = '良好表现';
-        } else if (percentage >= 60) {
+        } else if (percentage >= 50) {
             progressCircle.classList.add('average');
             performanceBadge.className = 'badge bg-warning';
             performanceBadge.textContent = '一般表现';
@@ -1423,7 +1702,7 @@ function displayStatistics(data) {
             gradeLevel.textContent = 'B级';
             gradeLevel.className = 'text-info mb-2';
             gradeMessage.textContent = '良好表现，再接再厉！';
-        } else if (data.accuracy >= 60) {
+        } else if (data.accuracy >= 50) {
             gradeIcon.className = 'fas fa-certificate';
             gradeIcon.style.color = '#ffc107';
             gradeLevel.textContent = 'C级';
@@ -1434,31 +1713,8 @@ function displayStatistics(data) {
             gradeIcon.style.color = '#dc3545';
             gradeLevel.textContent = 'D级';
             gradeLevel.className = 'text-danger mb-2';
-            gradeMessage.textContent = '需要加强练习！';
+            gradeMessage.textContent = '需要认真听讲！';
         }
-    }
-    
-    // 更新答题历史
-    const historyList = document.getElementById('quizHistoryList');
-    if (data.quiz_history && data.quiz_history.length > 0) {
-        historyList.innerHTML = data.quiz_history.map(quiz => `
-            <div class="quiz-history-item ${quiz.is_correct ? 'correct' : 'incorrect'}">
-                <div class="quiz-history-icon ${quiz.is_correct ? 'correct' : 'incorrect'}">
-                    <i class="fas fa-${quiz.is_correct ? 'check' : 'times'}"></i>
-                </div>
-                <div class="quiz-history-content">
-                    <div class="quiz-history-title">题目 #${quiz.quiz_id}: ${quiz.question || '题目内容'}</div>
-                    <div class="quiz-history-time">${quiz.time_ago} · 用时 ${quiz.answer_time || '--'}秒</div>
-                </div>
-            </div>
-        `).join('');
-    } else {
-        historyList.innerHTML = `
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-inbox fa-3x mb-3"></i>
-                <p>暂无答题记录</p>
-            </div>
-        `;
     }
     
     // 更新排行榜
@@ -1652,7 +1908,7 @@ async function leaveSession(sessionId) {
 // 刷新会话列表
 function refreshSessions() {
     loadAvailableSessions();
-    showMessage('会话列表已刷新', 'info');
+    showMessage('会话列表已刷新', 'success');
 }
 
 // 显示通过邀请码加入会话的模态框
@@ -1693,7 +1949,7 @@ async function joinByInviteCode() {
             document.getElementById('inviteCode').value = '';
             
             // 刷新已加入的会话列表
-            loadJoinedSessions();
+            loadAvailableSessions();
         } else {
             showMessage(data.error || '加入会话失败', 'error');
         }
