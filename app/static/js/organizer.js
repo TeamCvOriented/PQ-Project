@@ -1,6 +1,10 @@
 // 组织者界面的JavaScript功能
 
 let currentUser = null;
+let selectedSessions = {  // 记录各个模块的会话选择状态
+    analytics: null,
+    feedback: null
+};
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -25,6 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('change', function(e) {
         if (e.target && e.target.id === 'sessionSelect') {
             const sessionId = e.target.value;
+            selectedSessions.analytics = sessionId; // 保存统计模块的会话选择
             const container = document.getElementById('analyticsContent');
             if (container) {
                 if (sessionId) {
@@ -36,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     `;
                 } else {
+                    selectedSessions.analytics = null;
                     // 未选择会话，显示默认提示
                     container.innerHTML = `
                         <div class="text-center text-muted py-5">
@@ -50,6 +56,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // 反馈页面会话选择事件监听器
         if (e.target && e.target.id === 'feedbackSessionSelect') {
             const sessionId = e.target.value;
+            selectedSessions.feedback = sessionId; // 保存反馈模块的会话选择
             const container = document.getElementById('feedbackContent');
             if (container) {
                 if (sessionId) {
@@ -61,6 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     `;
                 } else {
+                    selectedSessions.feedback = null;
                     // 未选择会话，显示默认提示
                     container.innerHTML = `
                         <div class="text-center text-muted py-5">
@@ -93,6 +101,9 @@ async function checkAuthentication() {
             window.location.href = '/';
             return;
         }
+        
+        // 更新用户信息显示
+        loadUserInfo();
         
     } catch (error) {
         console.error('认证检查失败:', error);
@@ -132,9 +143,31 @@ function showSection(sectionId) {
                 break;
             case 'analytics':
                 loadAnalytics();
+                // 恢复之前选择的会话
+                setTimeout(() => {
+                    if (selectedSessions.analytics) {
+                        const analyticsSelect = document.getElementById('sessionSelect');
+                        if (analyticsSelect) {
+                            analyticsSelect.value = selectedSessions.analytics;
+                            // 自动加载之前选择的会话的统计数据
+                            loadSessionStatistics(selectedSessions.analytics);
+                        }
+                    }
+                }, 100);
                 break;
             case 'feedback':
                 loadOrganizerFeedbackSessions();
+                // 恢复之前选择的会话
+                setTimeout(() => {
+                    if (selectedSessions.feedback) {
+                        const feedbackSelect = document.getElementById('feedbackSessionSelect');
+                        if (feedbackSelect) {
+                            feedbackSelect.value = selectedSessions.feedback;
+                            // 自动加载之前选择的会话的反馈数据
+                            loadOrganizerFeedbackDataById(selectedSessions.feedback);
+                        }
+                    }
+                }, 100);
                 break;
         }
     }
@@ -692,6 +725,7 @@ function updateAnalyticsSessionSelect(sessions) {
     const select = document.getElementById('sessionSelect');
     if (!select) return;
     
+    const currentValue = select.value; // 保存当前选择的值
     select.innerHTML = '<option value="">请选择会话</option>';
     
     sessions.forEach(session => {
@@ -700,6 +734,11 @@ function updateAnalyticsSessionSelect(sessions) {
         option.textContent = `${session.title} (${session.is_active ? '进行中' : '已结束'})`;
         select.appendChild(option);
     });
+    
+    // 恢复之前的选择
+    if (currentValue && sessions.some(session => session.id == currentValue)) {
+        select.value = currentValue;
+    }
 }
 
 // 加载选中会话的统计数据
@@ -1016,6 +1055,7 @@ async function loadOrganizerFeedbackSessions() {
 // 填充反馈模块的会话选择下拉框
 function populateFeedbackSessionSelect(data) {
     const select = document.getElementById('feedbackSessionSelect');
+    const currentValue = select.value; // 保存当前选择的值
     select.innerHTML = '<option value="">请选择会话</option>';
     
     if (data.sessions && data.sessions.length > 0) {
@@ -1025,6 +1065,11 @@ function populateFeedbackSessionSelect(data) {
             option.textContent = `${session.title} (${session.speaker})`;
             select.appendChild(option);
         });
+        
+        // 恢复之前的选择
+        if (currentValue && data.sessions.some(session => session.id == currentValue)) {
+            select.value = currentValue;
+        }
     }
 }
 
@@ -1038,7 +1083,28 @@ async function loadOrganizerFeedbackData() {
         return;
     }
     
+    await loadOrganizerFeedbackDataById(sessionId);
+}
+
+// 根据会话ID加载组织者反馈数据
+async function loadOrganizerFeedbackDataById(sessionId) {
+    if (!sessionId) {
+        showMessage('会话ID无效', 'error');
+        return;
+    }
+    
     try {
+        // 显示加载状态
+        const feedbackContent = document.getElementById('feedbackContent');
+        feedbackContent.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-3">正在加载反馈数据...</p>
+            </div>
+        `;
+        
         const response = await fetch(`/api/quiz/session/${sessionId}/feedback-details`);
         if (response.ok) {
             const data = await response.json();

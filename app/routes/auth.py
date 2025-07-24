@@ -111,6 +111,26 @@ def get_profile():
         }
     })
 
+@auth_bp.route('/user', methods=['GET'])
+def get_user():
+    """获取当前用户信息（简化版）"""
+    if 'user_id' not in session:
+        return jsonify({'error': '未登录'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user:
+        return jsonify({'error': '用户不存在'}), 404
+    
+    return jsonify({
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role.value,
+            'nickname': user.nickname
+        }
+    })
+
 @auth_bp.route('/profile', methods=['PUT'])
 def update_profile():
     """更新用户信息"""

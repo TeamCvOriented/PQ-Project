@@ -605,22 +605,31 @@ def get_user_quiz_stats(session_id):
         total_duration = answered_duration + unanswered_duration
         avg_time = round(total_duration / total_quizzes, 1) if total_quizzes > 0 else None
     
-    # 计算排名 - 获取所有用户的统计数据和用户信息
+    # 计算排名 - 获取所有用户的统计数据和用户信息（仅包含听众）
+    from app.models import UserRole
+    
     all_user_stats = db.session.query(
         QuizResponse.user_id,
         db.func.count(QuizResponse.id).label('total'),
         db.func.sum(db.case((QuizResponse.is_correct == True, 1), else_=0)).label('correct'),
         db.func.sum(db.case((QuizResponse.answer != 'X', 1), else_=0)).label('actually_answered')  # 实际回答数
-    ).join(Quiz).filter(Quiz.session_id == session_id).group_by(QuizResponse.user_id).all()
+    ).join(Quiz).join(User, QuizResponse.user_id == User.id).filter(
+        Quiz.session_id == session_id,
+        User.role == UserRole.LISTENER  # 只包含听众
+    ).group_by(QuizResponse.user_id).all()
     
     # 按正确率排序，然后按答题数量排序（基于用户遇到的题目数计算正确率）
     sorted_stats = sorted(all_user_stats, 
                          key=lambda x: (x.correct / x.total if x.total > 0 else 0, x.actually_answered), 
                          reverse=True)
     
-    user_rank = next((i + 1 for i, stat in enumerate(sorted_stats) if stat.user_id == user_id), None)
+    # 计算当前用户在听众中的排名
+    user_rank = None
+    current_user = User.query.get(user_id)
+    if current_user and current_user.role == UserRole.LISTENER:
+        user_rank = next((i + 1 for i, stat in enumerate(sorted_stats) if stat.user_id == user_id), None)
     
-    # 构建排行榜数据，包含用户信息
+    # 构建排行榜数据，包含用户信息（仅听众）
     leaderboard = []
     for i, stat in enumerate(sorted_stats):
         user_info = User.query.get(stat.user_id)
@@ -645,7 +654,7 @@ def get_user_quiz_stats(session_id):
         'accuracy': round(accuracy, 1),
         'avg_time': avg_time,
         'rank': user_rank,
-        'total_participants': len(sorted_stats),
+        'total_participants': len(sorted_stats),  # 仅计算听众参与者
         'leaderboard': leaderboard
     })
 

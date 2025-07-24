@@ -2,6 +2,10 @@
 
 let currentUser = null;
 let currentSessionId = null;
+let selectedSessions = {  // 记录各个模块的会话选择状态
+    quiz: null,
+    feedback: null
+};
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -29,10 +33,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const sessionId = this.value;
         if (sessionId) {
             currentSessionId = sessionId;
+            selectedSessions.quiz = sessionId; // 保存题目管理模块的会话选择
             // 加载已发布题目
             loadPublishedQuizzes(sessionId);
         } else {
             currentSessionId = null;
+            selectedSessions.quiz = null;
             // 清空已发布题目显示
             const publishedContainer = document.getElementById('publishedQuizzes');
             publishedContainer.innerHTML = '<p class="text-muted text-center">请先选择会话查看已发布的题目</p>';
@@ -42,8 +48,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 反馈页面会话选择事件
     document.getElementById('feedbackSessionSelect').addEventListener('change', function() {
-        if (this.value) {
-            loadSessionFeedback(this.value);
+        const sessionId = this.value;
+        selectedSessions.feedback = sessionId; // 保存反馈模块的会话选择
+        if (sessionId) {
+            loadSessionFeedback(sessionId);
         } else {
             const container = document.getElementById('feedbackContent');
             container.innerHTML = '<p class="text-muted text-center">请选择会话查看反馈数据</p>';
@@ -69,6 +77,9 @@ async function checkAuthentication() {
             window.location.href = '/';
             return;
         }
+        
+        // 更新用户信息显示
+        loadUserInfo();
         
     } catch (error) {
         console.error('认证检查失败:', error);
@@ -105,12 +116,35 @@ function showSection(sectionId) {
                 break;
             case 'quizzes':
                 loadSessions(); // 为题目管理加载会话选项
+                // 恢复之前选择的会话
+                setTimeout(() => {
+                    if (selectedSessions.quiz) {
+                        const quizSelect = document.getElementById('quizSessionSelect');
+                        if (quizSelect) {
+                            quizSelect.value = selectedSessions.quiz;
+                            currentSessionId = selectedSessions.quiz;
+                            // 自动加载之前选择的会话的已发布题目
+                            loadPublishedQuizzes(selectedSessions.quiz);
+                        }
+                    }
+                }, 100);
                 break;
             case 'control':
                 loadSessions(); // 为控制面板加载会话选项
                 break;
             case 'statistics':
                 loadSessions(); // 为反馈页面加载会话选项
+                // 恢复之前选择的会话
+                setTimeout(() => {
+                    if (selectedSessions.feedback) {
+                        const feedbackSelect = document.getElementById('feedbackSessionSelect');
+                        if (feedbackSelect) {
+                            feedbackSelect.value = selectedSessions.feedback;
+                            // 自动加载之前选择的会话的反馈数据
+                            loadSessionFeedback(selectedSessions.feedback);
+                        }
+                    }
+                }, 100);
                 break;
         }
     }
@@ -176,6 +210,7 @@ function updateSessionSelects(sessions) {
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
         if (select) {
+            const currentValue = select.value; // 保存当前选择的值
             select.innerHTML = '<option value="">请选择会话</option>';
             sessions.forEach(session => {
                 const option = document.createElement('option');
@@ -183,6 +218,11 @@ function updateSessionSelects(sessions) {
                 option.textContent = session.title;
                 select.appendChild(option);
             });
+            
+            // 恢复之前的选择
+            if (currentValue && sessions.some(session => session.id == currentValue)) {
+                select.value = currentValue;
+            }
         }
     });
 }
