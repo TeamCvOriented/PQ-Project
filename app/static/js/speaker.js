@@ -29,19 +29,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const sessionId = this.value;
         if (sessionId) {
             currentSessionId = sessionId;
-            // 移除提示信息，只更新当前会话ID
+            // 加载已发布题目
+            loadPublishedQuizzes(sessionId);
         } else {
             currentSessionId = null;
+            // 清空已发布题目显示
+            const publishedContainer = document.getElementById('publishedQuizzes');
+            publishedContainer.innerHTML = '<p class="text-muted text-center">请先选择会话查看已发布的题目</p>';
+            document.getElementById('publishedQuizCount').textContent = '0';
         }
     });
     
-    // 统计页面会话选择事件
-    document.getElementById('statsSessionSelect').addEventListener('change', function() {
+    // 反馈页面会话选择事件
+    document.getElementById('feedbackSessionSelect').addEventListener('change', function() {
         if (this.value) {
-            loadSessionStatistics(this.value);
+            loadSessionFeedback(this.value);
         } else {
-            const container = document.getElementById('statisticsContent');
-            container.innerHTML = '<p class="text-muted text-center">请选择会话查看统计数据</p>';
+            const container = document.getElementById('feedbackContent');
+            container.innerHTML = '<p class="text-muted text-center">请选择会话查看反馈数据</p>';
         }
     });
 });
@@ -105,7 +110,7 @@ function showSection(sectionId) {
                 loadSessions(); // 为控制面板加载会话选项
                 break;
             case 'statistics':
-                loadSessions(); // 为统计页面加载会话选项
+                loadSessions(); // 为反馈页面加载会话选项
                 break;
         }
     }
@@ -166,7 +171,7 @@ function displaySessions(sessions) {
 
 // 更新会话选择下拉框
 function updateSessionSelects(sessions) {
-    const selects = ['quizSessionSelect', 'statsSessionSelect'];
+    const selects = ['quizSessionSelect', 'feedbackSessionSelect'];
     
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
@@ -869,29 +874,29 @@ function previewQuiz(quizIndex) {
     }
 }
 
-// 加载答题统计
-async function loadStatistics() {
+// 加载反馈数据
+async function loadFeedbackData() {
     try {
-        // 加载会话列表到统计页面的下拉框
+        // 加载会话列表到反馈页面的下拉框
         const response = await fetch('/api/session/list');
         if (response.ok) {
             const data = await response.json();
-            updateStatsSessionSelect(data.sessions);
+            updateFeedbackSessionSelect(data.sessions);
         }
         
-        // 清空统计内容
-        const container = document.getElementById('statisticsContent');
-        container.innerHTML = '<p class="text-muted text-center">请选择会话查看统计数据</p>';
+        // 清空反馈内容
+        const container = document.getElementById('feedbackContent');
+        container.innerHTML = '<p class="text-muted text-center">请选择会话查看反馈数据</p>';
         
     } catch (error) {
-        console.error('加载统计失败:', error);
-        showMessage('加载统计失败', 'error');
+        console.error('加载反馈数据失败:', error);
+        showMessage('加载反馈数据失败', 'error');
     }
 }
 
-// 更新统计页面的会话选择下拉框
-function updateStatsSessionSelect(sessions) {
-    const select = document.getElementById('statsSessionSelect');
+// 更新反馈页面的会话选择下拉框
+function updateFeedbackSessionSelect(sessions) {
+    const select = document.getElementById('feedbackSessionSelect');
     if (select) {
         select.innerHTML = '<option value="">选择会话</option>';
         sessions.forEach(session => {
@@ -904,18 +909,18 @@ function updateStatsSessionSelect(sessions) {
         // 添加会话选择事件监听器
         select.addEventListener('change', function() {
             if (this.value) {
-                loadSessionStatistics(this.value);
+                loadSessionFeedback(this.value);
             } else {
-                const container = document.getElementById('statisticsContent');
-                container.innerHTML = '<p class="text-muted text-center">请选择会话查看统计数据</p>';
+                const container = document.getElementById('feedbackContent');
+                container.innerHTML = '<p class="text-muted text-center">请选择会话查看反馈数据</p>';
             }
         });
     }
 }
 
-// 加载指定会话的统计数据
-async function loadSessionStatistics(sessionId) {
-    const container = document.getElementById('statisticsContent');
+// 加载指定会话的反馈数据
+async function loadSessionFeedback(sessionId) {
+    const container = document.getElementById('feedbackContent');
     
     try {
         // 显示加载状态
@@ -924,26 +929,26 @@ async function loadSessionStatistics(sessionId) {
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">加载中...</span>
                 </div>
-                <p class="mt-2">正在加载统计数据...</p>
+                <p class="mt-2">正在加载反馈数据...</p>
             </div>
         `;
         
-        const response = await fetch(`/api/quiz/statistics/${sessionId}`);
+        const response = await fetch(`/api/quiz/session/${sessionId}/feedback-details`);
         
         if (response.ok) {
             const data = await response.json();
-            displayStatistics(data);
+            displayFeedbackData(data);
         } else {
             const error = await response.json();
             container.innerHTML = `
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    ${error.error || '加载统计数据失败'}
+                    ${error.error || '加载反馈数据失败'}
                 </div>
             `;
         }
     } catch (error) {
-        console.error('加载会话统计失败:', error);
+        console.error('加载会话反馈失败:', error);
         container.innerHTML = `
             <div class="alert alert-danger">
                 <i class="fas fa-times-circle me-2"></i>
@@ -953,147 +958,156 @@ async function loadSessionStatistics(sessionId) {
     }
 }
 
-// 显示统计数据
-function displayStatistics(data) {
-    const container = document.getElementById('statisticsContent');
+// 显示反馈数据
+function displayFeedbackData(data) {
+    const container = document.getElementById('feedbackContent');
     
-    if (!data.quiz_statistics || data.quiz_statistics.length === 0) {
+    if (!data.feedback_statistics || data.total_feedback_count === 0) {
         container.innerHTML = `
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                该会话暂无题目数据
+            <div class="text-center py-5">
+                <i class="fas fa-comment-dots fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">暂无反馈数据</h5>
+                <p class="text-muted">当听众发送反馈时，数据将显示在这里</p>
             </div>
         `;
         return;
     }
     
-    // 计算总体统计
-    const totalQuizzes = data.quiz_statistics.length;
-    const totalResponses = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.total_responses, 0);
-    const totalCorrect = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.correct_responses, 0);
-    const overallAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses * 100).toFixed(1) : 0;
+    const feedbackStats = data.feedback_statistics;
     
     container.innerHTML = `
-        <!-- 总体统计卡片 -->
+        <!-- 反馈总数卡片 -->
         <div class="row mb-4">
-            <div class="col-md-3">
+            <div class="col-md-12">
                 <div class="card bg-primary text-white">
                     <div class="card-body text-center">
-                        <i class="fas fa-question-circle fa-2x mb-2"></i>
-                        <h4>${totalQuizzes}</h4>
-                        <small>总题目数</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-info text-white">
-                    <div class="card-body text-center">
-                        <i class="fas fa-users fa-2x mb-2"></i>
-                        <h4>${totalResponses}</h4>
-                        <small>总回答数</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-success text-white">
-                    <div class="card-body text-center">
-                        <i class="fas fa-check-circle fa-2x mb-2"></i>
-                        <h4>${totalCorrect}</h4>
-                        <small>正确回答数</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-warning text-white">
-                    <div class="card-body text-center">
-                        <i class="fas fa-percentage fa-2x mb-2"></i>
-                        <h4>${overallAccuracy}%</h4>
-                        <small>总体正确率</small>
+                        <i class="fas fa-comment-dots fa-2x mb-2"></i>
+                        <h3>${data.total_feedback_count}</h3>
+                        <p class="mb-0">总反馈数量</p>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- 详细题目统计 -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>题目详细统计
-                </h5>
-            </div>
-            <div class="card-body">
-                ${data.quiz_statistics.map((quiz, index) => `
-                    <div class="card mb-3 ${quiz.is_active ? 'border-success' : 'border-secondary'}">
+        <!-- 反馈类型统计 -->
+        <div class="row">
+            ${Object.entries(feedbackStats).map(([typeKey, typeData]) => `
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card feedback-type-card h-100" data-feedback-type="${typeKey}">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
-                                题目 ${index + 1}
-                                ${quiz.is_active ? '<span class="badge bg-success ms-2">进行中</span>' : '<span class="badge bg-secondary ms-2">已结束</span>'}
+                                <i class="fas fa-${getFeedbackIcon(typeKey)} me-2"></i>
+                                ${typeData.type_name}
                             </h6>
-                            <small class="text-muted">创建时间: ${new Date(quiz.created_at).toLocaleString()}</small>
+                            <span class="badge bg-primary">${typeData.count}</span>
                         </div>
                         <div class="card-body">
-                            <h6 class="mb-3">${quiz.question}</h6>
-                            
-                            <!-- 统计数据 -->
-                            <div class="row mb-3">
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <h5 class="text-primary">${quiz.total_responses}</h5>
-                                        <small class="text-muted">回答人数</small>
-                                    </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="text-center flex-grow-1">
+                                    <h4 class="text-primary">${typeData.count}</h4>
+                                    <small class="text-muted">反馈人数</small>
                                 </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <h5 class="text-success">${quiz.correct_responses}</h5>
-                                        <small class="text-muted">答对人数</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <h5 class="text-warning">${quiz.accuracy_rate.toFixed(1)}%</h5>
-                                        <small class="text-muted">正确率</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <h5 class="text-info">${quiz.correct_answer}</h5>
-                                        <small class="text-muted">正确答案</small>
-                                    </div>
+                                <div class="text-center flex-grow-1">
+                                    <h4 class="text-success">${typeData.percentage}%</h4>
+                                    <small class="text-muted">占比</small>
                                 </div>
                             </div>
                             
-                            <!-- 选项分布 -->
-                            <div class="mb-3">
-                                <h6>选项分布:</h6>
-                                <div class="row">
-                                    ${['A', 'B', 'C', 'D'].map(option => {
-                                        const count = quiz.option_distribution[option] || 0;
-                                        const percentage = quiz.total_responses > 0 ? (count / quiz.total_responses * 100).toFixed(1) : 0;
-                                        const isCorrect = quiz.correct_answer === option;
-                                        return `
-                                            <div class="col-md-3">
-                                                <div class="d-flex align-items-center mb-2">
-                                                    <span class="option-badge ${isCorrect ? 'bg-success' : 'bg-secondary'} me-2">${option}</span>
+                            <!-- 进度条 -->
+                            <div class="progress mb-3" style="height: 8px;">
+                                <div class="progress-bar bg-${getFeedbackColor(typeKey)}" 
+                                     style="width: ${typeData.percentage}%"></div>
+                            </div>
+                            
+                            <!-- 详细评论按钮 -->
+                            <div class="text-center">
+                                <button class="btn btn-outline-${getFeedbackColor(typeKey)} btn-sm" 
+                                        onclick="toggleFeedbackComments('${typeKey}')"
+                                        id="toggleBtn-${typeKey}">
+                                    <i class="fas fa-chevron-down me-1"></i>
+                                    查看详细评论 ${typeData.detailed_comments.length > 0 ? `(${typeData.detailed_comments.length})` : '(0)'}
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 详细评论区域（默认隐藏）-->
+                        <div id="comments-${typeKey}" class="feedback-comments" style="display: none;">
+                            <div class="card-footer">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-comments me-2"></i>详细评论
+                                </h6>
+                                <div class="comments-list" style="max-height: 300px; overflow-y: auto;">
+                                    ${typeData.detailed_comments.length > 0 ? 
+                                        typeData.detailed_comments.map(comment => `
+                                            <div class="comment-item p-3 mb-2 bg-light rounded">
+                                                <div class="d-flex justify-content-between align-items-start">
                                                     <div class="flex-grow-1">
-                                                        <div class="progress" style="height: 20px;">
-                                                            <div class="progress-bar ${isCorrect ? 'bg-success' : 'bg-secondary'}" 
-                                                                 style="width: ${percentage}%">
-                                                                ${count}人 (${percentage}%)
-                                                            </div>
-                                                        </div>
+                                                        <strong class="text-primary">
+                                                            ${comment.nickname || comment.username}
+                                                        </strong>
+                                                        <div class="mt-1">${comment.content}</div>
                                                     </div>
+                                                    <small class="text-muted ms-2">
+                                                        ${new Date(comment.created_at).toLocaleString()}
+                                                    </small>
                                                 </div>
                                             </div>
-                                        `;
-                                    }).join('')}
+                                        `).join('') 
+                                        : '<p class="text-muted text-center">该类型暂无详细评论</p>'
+                                    }
                                 </div>
                             </div>
                         </div>
                     </div>
-                `).join('')}
-            </div>
+                </div>
+            `).join('')}
         </div>
     `;
+}
+
+// 获取反馈类型的图标
+function getFeedbackIcon(feedbackType) {
+    const icons = {
+        'too_fast': 'tachometer-alt',
+        'too_slow': 'turtle',
+        'boring': 'frown',
+        'bad_question': 'question-circle',
+        'environment': 'volume-up',
+        'difficulty': 'brain'
+    };
+    return icons[feedbackType] || 'comment';
+}
+
+// 获取反馈类型的颜色
+function getFeedbackColor(feedbackType) {
+    const colors = {
+        'too_fast': 'warning',
+        'too_slow': 'info',
+        'boring': 'danger',
+        'bad_question': 'primary',
+        'environment': 'secondary',
+        'difficulty': 'success'
+    };
+    return colors[feedbackType] || 'primary';
+}
+
+// 切换反馈评论显示
+function toggleFeedbackComments(feedbackType) {
+    const commentsDiv = document.getElementById(`comments-${feedbackType}`);
+    const toggleBtn = document.getElementById(`toggleBtn-${feedbackType}`);
+    
+    if (commentsDiv.style.display === 'none') {
+        commentsDiv.style.display = 'block';
+        toggleBtn.innerHTML = '<i class="fas fa-chevron-up me-1"></i>隐藏详细评论';
+        toggleBtn.classList.remove('btn-outline-' + getFeedbackColor(feedbackType));
+        toggleBtn.classList.add('btn-' + getFeedbackColor(feedbackType));
+    } else {
+        commentsDiv.style.display = 'none';
+        const comments = commentsDiv.querySelectorAll('.comment-item').length;
+        toggleBtn.innerHTML = `<i class="fas fa-chevron-down me-1"></i>查看详细评论 ${comments > 0 ? `(${comments})` : '(0)'}`;
+        toggleBtn.classList.remove('btn-' + getFeedbackColor(feedbackType));
+        toggleBtn.classList.add('btn-outline-' + getFeedbackColor(feedbackType));
+    }
 }
 
 // 查看会话详情
@@ -1246,4 +1260,356 @@ function fallbackCopyTextToClipboard(text) {
     }
     
     document.body.removeChild(textArea);
+}
+
+// 加载已发布题目
+async function loadPublishedQuizzes(sessionId) {
+    const container = document.getElementById('publishedQuizzes');
+    const countBadge = document.getElementById('publishedQuizCount');
+    
+    try {
+        // 显示加载状态
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2 text-muted">正在加载已发布题目...</p>
+            </div>
+        `;
+        
+        const response = await fetch(`/api/quiz/session/${sessionId}/published`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayPublishedQuizzes(data.quizzes);
+            countBadge.textContent = data.total;
+        } else {
+            const error = await response.json();
+            container.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${error.error || '加载已发布题目失败'}
+                </div>
+            `;
+            countBadge.textContent = '0';
+        }
+    } catch (error) {
+        console.error('加载已发布题目错误:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle me-2"></i>
+                网络错误，请稍后重试
+            </div>
+        `;
+        countBadge.textContent = '0';
+    }
+}
+
+// 显示已发布题目
+function displayPublishedQuizzes(quizzes) {
+    const container = document.getElementById('publishedQuizzes');
+    
+    if (!quizzes || quizzes.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                <p class="text-muted">该会话暂无已发布题目</p>
+                <small class="text-muted">生成题目后，它们将显示在这里</small>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = quizzes.map((quiz, index) => `
+        <div class="card mb-3 published-quiz-card" data-quiz-id="${quiz.id}">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">
+                            <i class="fas fa-question-circle text-primary me-2"></i>
+                            题目 ${quiz.order_index}
+                            ${quiz.is_active ? '<span class="badge bg-success ms-2">进行中</span>' : '<span class="badge bg-secondary ms-2">已结束</span>'}
+                        </h6>
+                        <small class="text-muted">创建时间: ${new Date(quiz.created_at).toLocaleString()}</small>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-info me-2" onclick="toggleQuizDetails(${quiz.id})">
+                            <i class="fas fa-chart-bar me-1"></i>统计
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="toggleQuizDiscussion(${quiz.id})">
+                            <i class="fas fa-comments me-1"></i>讨论 
+                            ${quiz.statistics.discussion_count > 0 ? `<span class="badge bg-primary">${quiz.statistics.discussion_count}</span>` : ''}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 题目内容 -->
+                <div class="quiz-content">
+                    <h6 class="mb-3">${quiz.question}</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="option-item mb-2">
+                                <span class="option-badge ${quiz.correct_answer === 'A' ? 'bg-success' : 'bg-primary'}">A</span>
+                                ${quiz.option_a}
+                            </div>
+                            <div class="option-item mb-2">
+                                <span class="option-badge ${quiz.correct_answer === 'B' ? 'bg-success' : 'bg-secondary'}">B</span>
+                                ${quiz.option_b}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="option-item mb-2">
+                                <span class="option-badge ${quiz.correct_answer === 'C' ? 'bg-success' : 'bg-info'}">C</span>
+                                ${quiz.option_c}
+                            </div>
+                            <div class="option-item mb-2">
+                                <span class="option-badge ${quiz.correct_answer === 'D' ? 'bg-success' : 'bg-warning'}">D</span>
+                                ${quiz.option_d}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <strong>正确答案：</strong>
+                                <span class="badge bg-success">${quiz.correct_answer}</span>
+                                <div class="mt-2">
+                                    <strong>解释：</strong>${quiz.explanation}
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="d-flex justify-content-end">
+                                    <div class="me-3 text-center">
+                                        <div class="fw-bold text-primary">${quiz.statistics.total_responses}</div>
+                                        <small class="text-muted">回答人数</small>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="fw-bold text-success">${quiz.statistics.accuracy_rate}%</div>
+                                        <small class="text-muted">正确率</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 统计详情（默认隐藏）-->
+                <div id="quizStats-${quiz.id}" class="quiz-statistics mt-4" style="display: none;">
+                    <hr>
+                    <h6><i class="fas fa-chart-pie me-2"></i>详细统计</h6>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h6 class="mb-3">选项分布：</h6>
+                            <div class="row">
+                                ${['A', 'B', 'C', 'D'].map(option => {
+                                    const count = quiz.statistics.option_distribution[option];
+                                    const percentage = quiz.statistics.option_percentages[option];
+                                    const isCorrect = quiz.correct_answer === option;
+                                    return `
+                                        <div class="col-md-6 mb-3">
+                                            <div class="d-flex align-items-center">
+                                                <span class="option-badge ${isCorrect ? 'bg-success' : 'bg-secondary'} me-2">${option}</span>
+                                                <div class="flex-grow-1">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <small>${count}人</small>
+                                                        <small>${percentage.toFixed(1)}%</small>
+                                                    </div>
+                                                    <div class="progress" style="height: 8px;">
+                                                        <div class="progress-bar ${isCorrect ? 'bg-success' : 'bg-secondary'}" 
+                                                             style="width: ${percentage}%"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body p-3">
+                                            <h5 class="text-primary mb-1">${quiz.statistics.total_responses}</h5>
+                                            <small class="text-muted">总回答数</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body p-3">
+                                            <h5 class="text-success mb-1">${quiz.statistics.correct_responses}</h5>
+                                            <small class="text-muted">正确回答</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 讨论区（默认隐藏）-->
+                <div id="quizDiscussion-${quiz.id}" class="quiz-discussion mt-4" style="display: none;">
+                    <hr>
+                    <h6><i class="fas fa-comments me-2"></i>讨论区</h6>
+                    <div id="discussionMessages-${quiz.id}" class="discussion-messages mb-3">
+                        <!-- 讨论消息将在这里加载 -->
+                    </div>
+                    <div class="d-flex">
+                        <input type="text" class="form-control me-2" id="discussionInput-${quiz.id}" 
+                               placeholder="输入评论..." onkeypress="handleDiscussionKeyPress(event, ${quiz.id})">
+                        <button class="btn btn-primary" onclick="postDiscussion(${quiz.id})">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// 切换题目统计显示
+function toggleQuizDetails(quizId) {
+    const statsElement = document.getElementById(`quizStats-${quizId}`);
+    const button = event.target.closest('button');
+    
+    if (statsElement.style.display === 'none') {
+        statsElement.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-chart-bar me-1"></i>隐藏统计';
+        button.classList.remove('btn-outline-info');
+        button.classList.add('btn-info');
+    } else {
+        statsElement.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-chart-bar me-1"></i>统计';
+        button.classList.remove('btn-info');
+        button.classList.add('btn-outline-info');
+    }
+}
+
+// 切换题目讨论显示
+async function toggleQuizDiscussion(quizId) {
+    const discussionElement = document.getElementById(`quizDiscussion-${quizId}`);
+    const button = event.target.closest('button');
+    
+    if (discussionElement.style.display === 'none') {
+        // 显示讨论区并加载讨论内容
+        discussionElement.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-comments me-1"></i>隐藏讨论';
+        button.classList.remove('btn-outline-primary');
+        button.classList.add('btn-primary');
+        
+        // 加载讨论内容
+        await loadQuizDiscussions(quizId);
+    } else {
+        // 隐藏讨论区
+        discussionElement.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-comments me-1"></i>讨论';
+        button.classList.remove('btn-primary');
+        button.classList.add('btn-outline-primary');
+    }
+}
+
+// 加载题目讨论
+async function loadQuizDiscussions(quizId) {
+    const container = document.getElementById(`discussionMessages-${quizId}`);
+    
+    try {
+        container.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> 加载讨论中...</div>';
+        
+        const response = await fetch(`/api/quiz/${quizId}/discussions`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayDiscussions(quizId, data.discussions);
+        } else {
+            container.innerHTML = '<div class="text-muted text-center">加载讨论失败</div>';
+        }
+    } catch (error) {
+        console.error('加载讨论错误:', error);
+        container.innerHTML = '<div class="text-muted text-center">网络错误</div>';
+    }
+}
+
+// 显示讨论内容
+function displayDiscussions(quizId, discussions) {
+    const container = document.getElementById(`discussionMessages-${quizId}`);
+    
+    if (!discussions || discussions.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center py-3">暂无讨论，快来发表第一条评论吧！</div>';
+        return;
+    }
+    
+    container.innerHTML = discussions.map(discussion => `
+        <div class="discussion-item p-3 mb-2 bg-light rounded">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <strong class="text-primary">${discussion.username}</strong>
+                    <div class="mt-1">${discussion.message}</div>
+                </div>
+                <small class="text-muted">${new Date(discussion.created_at).toLocaleString()}</small>
+            </div>
+        </div>
+    `).join('');
+    
+    // 滚动到最新消息
+    container.scrollTop = container.scrollHeight;
+}
+
+// 发布讨论
+async function postDiscussion(quizId) {
+    const input = document.getElementById(`discussionInput-${quizId}`);
+    const message = input.value.trim();
+    
+    if (!message) {
+        showMessage('请输入评论内容', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/quiz/${quizId}/discussions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: message
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            input.value = '';
+            showMessage('评论发布成功', 'success');
+            
+            // 重新加载讨论内容
+            await loadQuizDiscussions(quizId);
+            
+            // 更新讨论计数
+            const button = document.querySelector(`button[onclick="toggleQuizDiscussion(${quizId})"]`);
+            if (button) {
+                const badge = button.querySelector('.badge');
+                if (badge) {
+                    const currentCount = parseInt(badge.textContent) || 0;
+                    badge.textContent = currentCount + 1;
+                } else {
+                    button.innerHTML = button.innerHTML.replace('讨论', '讨论 <span class="badge bg-primary">1</span>');
+                }
+            }
+        } else {
+            const error = await response.json();
+            showMessage(error.error || '发布评论失败', 'error');
+        }
+    } catch (error) {
+        console.error('发布讨论错误:', error);
+        showMessage('网络错误，请稍后重试', 'error');
+    }
+}
+
+// 处理讨论输入框的回车键
+function handleDiscussionKeyPress(event, quizId) {
+    if (event.key === 'Enter') {
+        postDiscussion(quizId);
+    }
 }

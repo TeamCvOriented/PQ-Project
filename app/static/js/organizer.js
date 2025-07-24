@@ -46,6 +46,31 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         }
+        
+        // 反馈页面会话选择事件监听器
+        if (e.target && e.target.id === 'feedbackSessionSelect') {
+            const sessionId = e.target.value;
+            const container = document.getElementById('feedbackContent');
+            if (container) {
+                if (sessionId) {
+                    // 选择了会话，显示提示用户点击按钮
+                    container.innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-comment-dots fa-3x mb-3"></i>
+                            <p>已选择会话，请点击"查看反馈"按钮来查看反馈信息</p>
+                        </div>
+                    `;
+                } else {
+                    // 未选择会话，显示默认提示
+                    container.innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-comment-dots fa-3x mb-3"></i>
+                            <p>请选择一个会话查看反馈信息</p>
+                        </div>
+                    `;
+                }
+            }
+        }
     });
 });
 
@@ -107,6 +132,9 @@ function showSection(sectionId) {
                 break;
             case 'analytics':
                 loadAnalytics();
+                break;
+            case 'feedback':
+                loadOrganizerFeedbackSessions();
                 break;
         }
     }
@@ -690,22 +718,62 @@ async function loadSelectedSessionStats() {
 // 加载会话统计数据
 async function loadSessionStatistics(sessionId) {
     if (!sessionId) {
-        document.getElementById('statisticsContent').innerHTML = '<div class="text-center text-muted py-5">请选择一个会话查看统计数据</div>';
+        document.getElementById('analyticsContent').innerHTML = '<div class="text-center text-muted py-5">请选择一个会话查看统计数据</div>';
         return;
     }
 
+    // 显示加载状态
+    document.getElementById('analyticsContent').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-3">正在加载统计数据...</p>
+        </div>
+    `;
+
     try {
+        console.log('正在加载会话统计，会话ID:', sessionId);
         const response = await fetch(`/api/quiz/statistics/${sessionId}`);
+        console.log('API响应状态:', response.status);
+        console.log('响应头:', response.headers);
+        
         if (response.ok) {
             const data = await response.json();
+            console.log('接收到的统计数据:', data);
             displayStatistics(data);
         } else {
-            const errorData = await response.json();
-            showMessage(errorData.error || '加载统计数据失败', 'error');
+            console.error('API请求失败，状态码:', response.status);
+            try {
+                const errorData = await response.json();
+                console.error('API错误响应:', errorData);
+                showMessage(errorData.error || '加载统计数据失败', 'error');
+            } catch (parseError) {
+                console.error('解析错误响应失败:', parseError);
+                showMessage(`服务器响应错误 (${response.status})`, 'error');
+            }
+            
+            // 显示错误状态
+            document.getElementById('analyticsContent').innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+                    <h5>加载失败</h5>
+                    <p>无法加载统计数据，请稍后重试</p>
+                </div>
+            `;
         }
     } catch (error) {
-        console.error('加载会话统计失败:', error);
+        console.error('加载会话统计失败，详细错误:', error);
         showMessage('网络错误，请稍后重试', 'error');
+        
+        // 显示网络错误状态
+        document.getElementById('analyticsContent').innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-wifi fa-3x mb-3 text-danger"></i>
+                <h5>网络错误</h5>
+                <p>请检查网络连接后重试</p>
+            </div>
+        `;
     }
 }
 
@@ -927,6 +995,203 @@ function showMessage(message, type = 'info') {
             messageDiv.parentNode.removeChild(messageDiv);
         }
     }, 3000);
+}
+
+// 加载组织者反馈模块的会话列表
+async function loadOrganizerFeedbackSessions() {
+    try {
+        const response = await fetch('/api/session/list');
+        if (response.ok) {
+            const sessions = await response.json();
+            populateFeedbackSessionSelect(sessions);
+        } else {
+            throw new Error('获取会话列表失败');
+        }
+    } catch (error) {
+        console.error('加载会话列表失败:', error);
+        showMessage('加载会话列表失败，请稍后重试', 'error');
+    }
+}
+
+// 填充反馈模块的会话选择下拉框
+function populateFeedbackSessionSelect(data) {
+    const select = document.getElementById('feedbackSessionSelect');
+    select.innerHTML = '<option value="">请选择会话</option>';
+    
+    if (data.sessions && data.sessions.length > 0) {
+        data.sessions.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.id;
+            option.textContent = `${session.title} (${session.speaker})`;
+            select.appendChild(option);
+        });
+    }
+}
+
+// 加载组织者反馈数据
+async function loadOrganizerFeedbackData() {
+    const sessionSelect = document.getElementById('feedbackSessionSelect');
+    const sessionId = sessionSelect.value;
+    
+    if (!sessionId) {
+        showMessage('请先选择一个会话', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/quiz/session/${sessionId}/feedback-details`);
+        if (response.ok) {
+            const data = await response.json();
+            renderOrganizerFeedbackData(data);
+        } else {
+            throw new Error('获取反馈数据失败');
+        }
+    } catch (error) {
+        console.error('加载反馈数据失败:', error);
+        showMessage('加载反馈数据失败，请稍后重试', 'error');
+        document.getElementById('feedbackContent').innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-exclamation-triangle fa-3x mb-3"></i><p>加载失败，请稍后重试</p></div>';
+    }
+}
+
+// 渲染组织者反馈数据
+function renderOrganizerFeedbackData(data) {
+    const feedbackContent = document.getElementById('feedbackContent');
+    
+    if (!data.feedback_statistics || data.total_feedback_count === 0) {
+        feedbackContent.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-comment-dots fa-3x mb-3"></i>
+                <h4>暂无反馈</h4>
+                <p>当前会话还没有收到任何反馈</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const feedbackStats = data.feedback_statistics;
+    
+    // 统计有人反馈的类型数量
+    const activeTypesCount = Object.values(feedbackStats).filter(typeData => typeData.count > 0).length;
+    
+    // 创建反馈概览卡片
+    const overviewHtml = `
+        <div class="row mb-4 justify-content-center">
+            <div class="col-md-5">
+                <div class="card text-center" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%); color: white;">
+                    <div class="card-body">
+                        <h5 class="card-title">总反馈数</h5>
+                        <h2 class="mb-0">${data.total_feedback_count}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="card text-center" style="background: linear-gradient(135deg, var(--accent-color) 0%, var(--rose-gold) 100%); color: white;">
+                    <div class="card-body">
+                        <h5 class="card-title">反馈类型</h5>
+                        <h2 class="mb-0">${activeTypesCount}</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 创建反馈类型卡片
+    const feedbackCardsHtml = Object.entries(feedbackStats).map(([typeKey, typeData]) => `
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="feedback-type-card card h-100">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-${getFeedbackIcon(typeKey)} me-2"></i>
+                            <span>${typeData.type_name}</span>
+                        </div>
+                        <span class="badge bg-light text-dark">${typeData.count} 人</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h2 class="text-primary mb-0">${typeData.percentage}%</h2>
+                        <small class="text-muted">占总反馈比例</small>
+                    </div>
+                    <div class="feedback-progress mb-3">
+                        <div class="progress-bar" style="width: ${typeData.percentage}%; background: linear-gradient(90deg, var(--primary-color) 0%, var(--accent-color) 100%);"></div>
+                    </div>
+                    ${typeData.detailed_comments.length > 0 ? `
+                        <div class="text-center">
+                            <button class="btn btn-outline-primary btn-sm" 
+                                    onclick="toggleOrganizerFeedbackComments('${typeKey}')">
+                                <i class="fas fa-comments me-1"></i>
+                                查看详细评论 (${typeData.detailed_comments.length})
+                            </button>
+                        </div>
+                    ` : '<p class="text-muted text-center mb-0">暂无详细评论</p>'}
+                </div>
+                ${typeData.detailed_comments.length > 0 ? `
+                    <div id="organizer-comments-${typeKey}" class="feedback-comments" style="display: none;">
+                        <div class="p-3">
+                            <h6 class="mb-3">
+                                <i class="fas fa-comment-dots me-2"></i>详细评论
+                            </h6>
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                ${typeData.detailed_comments.map(comment => `
+                                    <div class="comment-item p-2 mb-2">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <strong class="text-primary">${comment.nickname || comment.username}</strong>
+                                                <div class="mt-1">${comment.content}</div>
+                                            </div>
+                                            <small class="text-muted ms-2">
+                                                ${new Date(comment.created_at).toLocaleString()}
+                                            </small>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    feedbackContent.innerHTML = `
+        ${overviewHtml}
+        <div class="row">
+            ${feedbackCardsHtml}
+        </div>
+    `;
+}
+
+// 获取反馈类型图标
+function getFeedbackIcon(type) {
+    const icons = {
+        'too_fast': 'tachometer-alt',
+        'too_slow': 'hourglass-half',
+        'boring': 'bed',
+        'bad_question': 'question-circle',
+        'environment': 'volume-up',
+        'difficulty': 'brain'
+    };
+    return icons[type] || 'comment';
+}
+
+// 切换组织者反馈评论显示
+function toggleOrganizerFeedbackComments(typeKey) {
+    const commentsDiv = document.getElementById(`organizer-comments-${typeKey}`);
+    const button = event.target.closest('button');
+    
+    if (commentsDiv.style.display === 'none' || commentsDiv.style.display === '') {
+        commentsDiv.style.display = 'block';
+        if (button) {
+            button.innerHTML = '<i class="fas fa-comments me-1"></i>隐藏评论';
+        }
+    } else {
+        commentsDiv.style.display = 'none';
+        if (button) {
+            const commentCount = commentsDiv.querySelectorAll('.comment-item').length;
+            button.innerHTML = `<i class="fas fa-comments me-1"></i>查看详细评论 (${commentCount})`;
+        }
+    }
 }
 
 // 复制邀请码功能

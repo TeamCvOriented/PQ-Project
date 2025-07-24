@@ -358,6 +358,72 @@
             box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
         }
 
+        /* 已发布题目卡片样式 */
+        .published-quiz-card {
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+        }
+
+        .published-quiz-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .option-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        .quiz-statistics {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .quiz-discussion {
+            background: #f1f5f9;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .discussion-messages {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .discussion-item {
+            border: 1px solid #e2e8f0;
+        }
+
+        .discussion-item:hover {
+            background: #ffffff !important;
+        }
+
+        /* 反馈类型卡片样式 */
+        .feedback-type-card {
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+        }
+
+        .feedback-type-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .feedback-comments {
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .comment-item {
+            border: 1px solid #e2e8f0;
+            transition: background-color 0.2s ease;
+        }
+
+        .comment-item:hover {
+            background: #ffffff !important;
+        }
+
         /* Toast 消息样式 */
         .toast {
             border-radius: 12px;
@@ -458,7 +524,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" data-section="statistics">
-                            <i class="fas fa-chart-line me-2"></i>答题统计
+                            <i class="fas fa-comment-dots me-2"></i>反馈信息
                         </a>
                     </li>
                     <li class="nav-item mt-auto">
@@ -538,23 +604,39 @@
                     <div id="quizzesList">
                         <!-- 题目列表将在这里显示 -->
                     </div>
+                    
+                    <!-- 已发布题目 -->
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-list-alt me-2"></i>已发布题目
+                                <span id="publishedQuizCount" class="badge bg-primary ms-2">0</span>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="publishedQuizzes">
+                                <p class="text-muted text-center">请先选择会话查看已发布的题目</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <!-- 答题统计 -->
+                <!-- 反馈信息 -->
                 <div id="statistics" class="content-section">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>答题统计</h2>
+                        <h2>反馈信息</h2>
                         <div>
-                            <select class="form-select d-inline-block me-3" id="statsSessionSelect" style="width: auto;">
+                            <select class="form-select d-inline-block me-3" id="feedbackSessionSelect" style="width: auto;">
                                 <option value="">选择会话</option>
                             </select>
-                            <button class="btn btn-outline-primary" onclick="loadStatistics()">
+                            <button class="btn btn-outline-primary" onclick="loadFeedbackData()">
                                 <i class="fas fa-sync me-2"></i>刷新数据
                             </button>
                         </div>
                     </div>
-                    <div id="statisticsContent">
-                        <!-- 统计内容将在这里显示 -->
+                    <div id="feedbackContent">
+                        <!-- 反馈内容将在这里显示 -->
+                        <p class="text-muted text-center">请选择会话查看反馈数据</p>
                     </div>
                 </div>
             </div>

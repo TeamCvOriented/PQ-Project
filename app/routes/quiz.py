@@ -496,49 +496,65 @@ def get_current_quiz(session_id):
 @require_auth
 def get_quiz_statistics(session_id):
     """获取题目统计信息"""
-    # 验证会话存在
-    pq_session = PQSession.query.get(session_id)
-    if not pq_session:
-        return jsonify({'error': '会话不存在'}), 404
-    
-    # 获取所有题目及其回答统计
-    quizzes = Quiz.query.filter_by(session_id=session_id).all()
-    
-    quiz_stats = []
-    for quiz in quizzes:
-        responses = QuizResponse.query.filter_by(quiz_id=quiz.id).all()
+    try:
+        # 验证会话存在
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'error': '会话不存在'}), 404
         
-        total_responses = len(responses)
-        correct_responses = sum(1 for r in responses if r.is_correct)
+        # 获取所有题目及其回答统计
+        quizzes = Quiz.query.filter_by(session_id=session_id).all()
         
-        # 选项分布统计
-        option_stats = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
-        for response in responses:
-            option_stats[response.answer] += 1
+        quiz_stats = []
+        for quiz in quizzes:
+            try:
+                responses = QuizResponse.query.filter_by(quiz_id=quiz.id).all()
+                
+                total_responses = len(responses)
+                correct_responses = 0
+                
+                # 计算正确回答数 - 通过比较答案而不是依赖is_correct字段
+                for response in responses:
+                    if response.answer == quiz.correct_answer:
+                        correct_responses += 1
+                
+                # 选项分布统计
+                option_stats = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
+                for response in responses:
+                    if response.answer in option_stats:
+                        option_stats[response.answer] += 1
+                
+                quiz_stats.append({
+                    'id': quiz.id,
+                    'question': quiz.question,
+                    'option_a': quiz.option_a,
+                    'option_b': quiz.option_b,
+                    'option_c': quiz.option_c,
+                    'option_d': quiz.option_d,
+                    'correct_answer': quiz.correct_answer,
+                    'total_responses': total_responses,
+                    'correct_responses': correct_responses,
+                    'accuracy_rate': (correct_responses / total_responses * 100) if total_responses > 0 else 0,
+                    'option_distribution': option_stats,
+                    'is_active': quiz.is_active,
+                    'created_at': quiz.created_at.isoformat(),
+                    'explanation': quiz.explanation,
+                    'time_limit': quiz.time_limit
+                })
+            except Exception as e:
+                print(f"处理题目 {quiz.id} 时出错: {e}")
+                # 继续处理其他题目，不让单个题目的错误影响整个请求
+                continue
         
-        quiz_stats.append({
-            'id': quiz.id,
-            'question': quiz.question,
-            'option_a': quiz.option_a,
-            'option_b': quiz.option_b,
-            'option_c': quiz.option_c,
-            'option_d': quiz.option_d,
-            'correct_answer': quiz.correct_answer,
-            'total_responses': total_responses,
-            'correct_responses': correct_responses,
-            'accuracy_rate': (correct_responses / total_responses * 100) if total_responses > 0 else 0,
-            'option_distribution': option_stats,
-            'is_active': quiz.is_active,
-            'created_at': quiz.created_at.isoformat(),
-            'explanation': quiz.explanation,
-            'time_limit': quiz.time_limit
+        return jsonify({
+            'session_id': session_id,
+            'quiz_statistics': quiz_stats,
+            'total_quizzes': len(quiz_stats)
         })
-    
-    return jsonify({
-        'session_id': session_id,
-        'quiz_statistics': quiz_stats,
-        'total_quizzes': len(quiz_stats)
-    })
+        
+    except Exception as e:
+        print(f"获取统计信息时出错: {e}")
+        return jsonify({'error': f'获取统计信息失败: {str(e)}'}), 500
 
 @quiz_bp.route('/user-stats/<int:session_id>', methods=['GET'])
 @require_auth
@@ -763,6 +779,83 @@ def get_feedback_stats(session_id):
         
     except Exception as e:
         return jsonify({'error': f'获取反馈统计失败: {str(e)}'}), 500
+
+@quiz_bp.route('/session/<int:session_id>/feedback-details', methods=['GET'])
+@require_auth
+def get_session_feedback_details(session_id):
+    """获取会话的详细反馈统计信息（用于演讲者界面）"""
+    try:
+        # 验证会话存在
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'error': '会话不存在'}), 404
+            
+        # 检查权限（演讲者或组织者）
+        user_id = session['user_id']
+        if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
+            return jsonify({'error': '权限不足'}), 403
+        
+        # 获取所有反馈
+        feedbacks = Feedback.query.filter_by(session_id=session_id).all()
+        total_feedback_count = len(feedbacks)
+        
+        # 定义反馈类型及其描述
+        feedback_types = {
+            'too_fast': '语速太快',
+            'too_slow': '语速太慢', 
+            'boring': '内容枯燥',
+            'bad_question': '题目质量',
+            'environment': '环境问题',
+            'difficulty': '难度问题'
+        }
+        
+        # 统计各类型反馈
+        feedback_stats = {}
+        
+        for type_key, type_name in feedback_types.items():
+            type_feedbacks = [f for f in feedbacks if f.feedback_type == type_key]
+            count = len(type_feedbacks)
+            percentage = (count / total_feedback_count * 100) if total_feedback_count > 0 else 0
+            
+            # 获取详细评论（有内容的反馈）
+            detailed_comments = []
+            for feedback in type_feedbacks:
+                if feedback.content and feedback.content.strip():
+                    # 获取用户信息
+                    user = User.query.get(feedback.user_id)
+                    detailed_comments.append({
+                        'id': feedback.id,
+                        'user_id': feedback.user_id,
+                        'username': user.username if user else '未知用户',
+                        'nickname': user.nickname if user and user.nickname else None,
+                        'content': feedback.content,
+                        'created_at': feedback.created_at.isoformat()
+                    })
+            
+            # 按时间倒序排列评论
+            detailed_comments.sort(key=lambda x: x['created_at'], reverse=True)
+            
+            feedback_stats[type_key] = {
+                'type_name': type_name,
+                'count': count,
+                'percentage': round(percentage, 1),
+                'detailed_comments': detailed_comments
+            }
+        
+        return jsonify({
+            'success': True,
+            'session_info': {
+                'id': pq_session.id,
+                'title': pq_session.title,
+                'is_active': pq_session.is_active
+            },
+            'total_feedback_count': total_feedback_count,
+            'feedback_statistics': feedback_stats
+        })
+        
+    except Exception as e:
+        print(f"获取反馈详情错误: {e}")
+        return jsonify({'error': '系统错误'}), 500
 
 @quiz_bp.route('/generate-ai-quizzes', methods=['POST'])
 @require_auth
@@ -1345,6 +1438,91 @@ def get_session_quizzes(session_id):
         
     except Exception as e:
         print(f"获取题目列表错误: {e}")
+        return jsonify({'error': '系统错误'}), 500
+
+@quiz_bp.route('/session/<int:session_id>/published', methods=['GET'])
+@require_auth  
+def get_published_quizzes(session_id):
+    """获取会话的已发布题目及其详细统计和讨论信息（用于演讲者界面）"""
+    try:
+        # 验证会话存在
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'error': '会话不存在'}), 404
+            
+        # 检查权限（演讲者或组织者）
+        user_id = session['user_id']
+        if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
+            return jsonify({'error': '权限不足'}), 403
+        
+        # 获取题目列表（按创建时间升序，便于显示顺序）
+        quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
+        
+        quiz_list = []
+        for i, quiz in enumerate(quizzes):
+            # 获取该题目的所有回答
+            responses = QuizResponse.query.filter_by(quiz_id=quiz.id).all()
+            total_responses = len(responses)
+            
+            # 计算选项分布
+            option_distribution = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
+            correct_responses = 0
+            
+            for response in responses:
+                if response.answer in option_distribution:
+                    option_distribution[response.answer] += 1
+                if response.answer == quiz.correct_answer:
+                    correct_responses += 1
+            
+            # 计算正确率
+            accuracy_rate = (correct_responses / total_responses * 100) if total_responses > 0 else 0
+            
+            # 获取选项分布百分比
+            option_percentages = {}
+            for option, count in option_distribution.items():
+                option_percentages[option] = (count / total_responses * 100) if total_responses > 0 else 0
+            
+            # 获取讨论数量
+            discussion_count = QuizDiscussion.query.filter_by(quiz_id=quiz.id).count()
+            
+            quiz_data = {
+                'id': quiz.id,
+                'question': quiz.question,
+                'option_a': quiz.option_a,
+                'option_b': quiz.option_b,
+                'option_c': quiz.option_c,
+                'option_d': quiz.option_d,
+                'correct_answer': quiz.correct_answer,
+                'explanation': quiz.explanation,
+                'time_limit': quiz.time_limit,
+                'is_active': quiz.is_active,
+                'created_at': quiz.created_at.isoformat(),
+                'order_index': i + 1,
+                'statistics': {
+                    'total_responses': total_responses,
+                    'correct_responses': correct_responses,
+                    'accuracy_rate': round(accuracy_rate, 1),
+                    'option_distribution': option_distribution,
+                    'option_percentages': option_percentages,
+                    'discussion_count': discussion_count
+                }
+            }
+            
+            quiz_list.append(quiz_data)
+        
+        return jsonify({
+            'success': True,
+            'quizzes': quiz_list,
+            'total': len(quiz_list),
+            'session_info': {
+                'id': pq_session.id,
+                'title': pq_session.title,
+                'is_active': pq_session.is_active
+            }
+        })
+        
+    except Exception as e:
+        print(f"获取已发布题目错误: {e}")
         return jsonify({'error': '系统错误'}), 500
 
 @quiz_bp.route('/test-upload', methods=['POST'])
