@@ -7,130 +7,398 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            /* 组织者页面 - 深紫色+银色+玫瑰金高端配色 */
+            --primary-color: #6b46c1;      /* 深紫色 - 主色 */
+            --secondary-color: #94a3b8;    /* 银灰色 - 次要色 */
+            --accent-color: #e879f9;       /* 亮紫色 - 强调色 */
+            --rose-gold: #f59e0b;          /* 玫瑰金 - 奢华色 */
+            --success-color: #10b981;      /* 成功绿 */
+            --warning-color: #f59e0b;      /* 警告黄 */
+            --danger-color: #ef4444;       /* 危险红 */
+            --dark-color: #1e1b4b;         /* 深紫黑 */
+            --light-bg: #faf7ff;           /* 浅紫背景 */
+            --card-shadow: 0 4px 20px rgba(107, 70, 193, 0.1);
+            --hover-shadow: 0 8px 30px rgba(107, 70, 193, 0.15);
+        }
+
+        body {
+            background: linear-gradient(135deg, #faf7ff 0%, #f3f4f6 50%, #fdf2f8 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* 侧边栏样式 */
         .sidebar {
-            background: #343a40;
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--dark-color) 100%);
             min-height: 100vh;
             color: white;
+            box-shadow: 4px 0 20px rgba(107, 70, 193, 0.15);
+            border-radius: 0 20px 20px 0;
+            position: relative;
+            overflow: hidden;
         }
+
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--rose-gold), var(--accent-color));
+        }
+
+        .sidebar .text-center {
+            padding: 2rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 1rem;
+            position: relative;
+        }
+
+        .sidebar .text-center i {
+            background: linear-gradient(135deg, var(--rose-gold), var(--accent-color));
+            padding: 1rem;
+            border-radius: 50%;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+        }
+
         .sidebar .nav-link {
-            color: #adb5bd;
-            transition: all 0.3s;
+            color: rgba(255, 255, 255, 0.8);
+            transition: all 0.3s ease;
+            border-radius: 12px;
+            margin: 0.25rem 0;
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
         }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+
+        .sidebar .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .sidebar .nav-link:hover::before {
+            left: 100%;
+        }
+
+        .sidebar .nav-link:hover {
             color: white;
-            background-color: #495057;
+            background: rgba(245, 158, 11, 0.2);
+            transform: translateX(5px);
         }
+
+        .sidebar .nav-link.active {
+            color: white;
+            background: linear-gradient(135deg, var(--rose-gold) 0%, var(--accent-color) 100%);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+        }
+
+        /* 统计卡片样式 */
+        .stats-card {
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stats-card.primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            color: white;
+        }
+
+        .stats-card.secondary {
+            background: linear-gradient(135deg, var(--secondary-color) 0%, #64748b 100%);
+            color: white;
+        }
+
+        .stats-card.success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+            color: white;
+        }
+
+        .stats-card.info {
+            background: linear-gradient(135deg, var(--rose-gold) 0%, #d97706 100%);
+            color: white;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--hover-shadow);
+        }
+
+        .stats-card i {
+            font-size: 2.5rem;
+            opacity: 0.9;
+            margin-bottom: 1rem;
+        }
+
+        .stats-card h4 {
+            font-weight: 700;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* 卡片样式 */
+        .card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            background: white;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            box-shadow: var(--hover-shadow);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            color: white;
+            border: none;
+            padding: 1.25rem 1.5rem;
+            font-weight: 600;
+        }
+
+        .card-header.secondary {
+            background: linear-gradient(135deg, var(--secondary-color) 0%, var(--rose-gold) 100%);
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* 按钮样式 */
+        .btn {
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            box-shadow: 0 4px 15px rgba(107, 70, 193, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #553c9a 0%, #d946ef 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(107, 70, 193, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--rose-gold) 0%, #d97706 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-warning:hover {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-outline-primary {
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+            background: transparent;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(107, 70, 193, 0.3);
+        }
+
+        .btn-outline-warning {
+            border: 2px solid var(--rose-gold);
+            color: var(--rose-gold);
+            background: transparent;
+        }
+
+        .btn-outline-warning:hover {
+            background: var(--rose-gold);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+        }
+
+        /* 表单元素样式 */
+        .form-control, .form-select {
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+            outline: none;
+        }
+
+        /* 会话卡片样式 */
+        .session-card {
+            border-left: 4px solid var(--rose-gold);
+            transition: all 0.3s ease;
+        }
+
+        .session-card:hover {
+            border-left-color: var(--accent-color);
+            background: linear-gradient(135deg, #fdf2f8 0%, white 100%);
+        }
+
+        .session-card.active {
+            border-left-color: var(--primary-color);
+            background: linear-gradient(135deg, var(--light-bg) 0%, white 100%);
+        }
+
+        /* 题目统计样式 */
+        .quiz-stats {
+            background: linear-gradient(135deg, #faf7ff 0%, #f3f4f6 100%);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .quiz-stats .badge {
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        /* 进度条样式 */
+        .progress {
+            height: 8px;
+            border-radius: 10px;
+            background: #e5e7eb;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            border-radius: 10px;
+        }
+
+        /* 模态框样式 */
+        .modal-content {
+            border-radius: 16px;
+            border: none;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            color: white;
+            border: none;
+            border-radius: 16px 16px 0 0;
+        }
+
+        /* Toast 消息样式 */
+        .toast {
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            border: none;
+        }
+
+        .toast-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            color: white;
+            border: none;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                border-radius: 0;
+                min-height: auto;
+            }
+            
+            .stats-card {
+                padding: 1.5rem;
+            }
+            
+            .card-body {
+                padding: 1rem;
+            }
+        }
+
+        /* 页面标题 */
+        h2 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        h2::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 60px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--rose-gold), var(--accent-color));
+            border-radius: 2px;
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(107, 70, 193, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 内容区动画 */
         .content-section {
             display: none;
+            animation: fadeIn 0.5s ease-in-out;
         }
+
         .content-section.active {
             display: block;
         }
-        .stats-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 15px;
-            padding: 20px;
-        }
-        .session-card {
-            border: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-        }
-        .session-card:hover {
-            transform: translateY(-2px);
-        }
-        
-        .quiz-stat-item {
-            transition: all 0.3s ease;
-        }
-        
-        .quiz-stat-item:hover {
-            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
-        }
-        
-        .quiz-header {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        }
-        
-        .option-card {
-            transition: all 0.3s ease;
-            background: #fff;
-        }
-        
-        .option-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        
-        .option-label .badge {
-            font-size: 0.9em;
-            padding: 0.5em 0.8em;
-        }
-        
-        .stat-item {
-            padding: 0.5rem;
-            border-radius: 0.375rem;
-            transition: all 0.3s ease;
-        }
-        
-        .stat-item:hover {
-            background-color: rgba(0,0,0,0.05);
-        }
-        
-        .quiz-explanation {
-            border-left: 4px solid #ffc107;
-        }
-        
-        .progress {
-            transition: all 0.3s ease;
-        }
-        
-        .card {
-            transition: all 0.3s ease;
-        }
-        
-        .card:hover {
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
-        
-        .option-text {
-            font-weight: 500;
-            color: #495057;
-            line-height: 1.4;
-        }
-        
-        .quiz-stats {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        }
-        
-        .stat-box {
-            transition: all 0.3s ease;
-        }
-        
-        .stat-box:hover {
-            background-color: #e9ecef !important;
-        }
-        
-        .option-stat {
-            transition: all 0.3s ease;
-        }
-        
-        .option-stat:hover {
-            transform: scale(1.05);
-        }
-        
-        .progress {
-            transition: all 0.3s ease;
-        }
-        
-        .card {
-            transition: all 0.3s ease;
-        }
-        
-        .card:hover {
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
@@ -140,9 +408,8 @@
             <!-- 侧边栏 -->
             <div class="col-md-3 col-lg-2 sidebar p-3">
                 <div class="text-center mb-4">
-                    <i class="fas fa-users fa-2x mb-2"></i>
+                    <i class="fas fa-users-cog fa-2x mb-2"></i>
                     <h5>组织者控制台</h5>
-                    <!-- <small class="text-muted" id="userInfo">加载中...</small> -->
                 </div>
                 
                 <ul class="nav nav-pills flex-column">
@@ -153,7 +420,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" data-section="sessions">
-                            <i class="fas fa-calendar me-2"></i>会话管理
+                            <i class="fas fa-calendar-alt me-2"></i>会话管理
                         </a>
                     </li>
                     <li class="nav-item">
@@ -162,7 +429,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" data-section="statistics">
+                        <a class="nav-link" href="#" data-section="analytics">
                             <i class="fas fa-chart-bar me-2"></i>统计分析
                         </a>
                     </li>
@@ -178,69 +445,48 @@
             <div class="col-md-9 col-lg-10 p-4">
                 <!-- 仪表板 -->
                 <div id="dashboard" class="content-section active">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>仪表板</h2>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
-                            <i class="fas fa-plus me-2"></i>创建新会话
-                        </button>
-                    </div>
+                    <h2 class="mb-4">仪表板概览</h2>
                     
                     <!-- 统计卡片 -->
                     <div class="row mb-4">
-                        <div class="col-md-3">
-                            <div class="stats-card">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-calendar fa-2x me-3"></i>
-                                    <div>
-                                        <h4 id="totalSessions">0</h4>
-                                        <small>总会话数</small>
-                                    </div>
-                                </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card primary">
+                                <i class="fas fa-calendar-check"></i>
+                                <h4 id="totalSessions">0</h4>
+                                <small>总会话数</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="stats-card">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-users fa-2x me-3"></i>
-                                    <div>
-                                        <h4 id="totalParticipants">0</h4>
-                                        <small>总参与人数</small>
-                                    </div>
-                                </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card secondary">
+                                <i class="fas fa-microphone"></i>
+                                <h4 id="totalSpeakers">0</h4>
+                                <small>演讲者数量</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="stats-card">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-question fa-2x me-3"></i>
-                                    <div>
-                                        <h4 id="totalQuizzes">0</h4>
-                                        <small>总题目数</small>
-                                    </div>
-                                </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card success">
+                                <i class="fas fa-users"></i>
+                                <h4 id="totalParticipants">0</h4>
+                                <small>参与者总数</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="stats-card">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-check fa-2x me-3"></i>
-                                    <div>
-                                        <h4 id="avgAccuracy">0%</h4>
-                                        <small>平均正确率</small>
-                                    </div>
-                                </div>
+                        <div class="col-md-3 col-sm-6">
+                            <div class="stats-card info">
+                                <i class="fas fa-question-circle"></i>
+                                <h4 id="totalQuizzes">0</h4>
+                                <small>题目总数</small>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- 最近会话 -->
+                    <!-- 最近活动 -->
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="mb-0">最近的会话</h5>
+                            <h5 class="mb-0">最近活动</h5>
                         </div>
                         <div class="card-body">
-                            <div id="recentSessions">
-                                <p class="text-muted">暂无会话数据</p>
+                            <div id="recentActivities">
+                                <!-- 最近活动将在这里显示 -->
                             </div>
                         </div>
                     </div>
@@ -250,13 +496,13 @@
                 <div id="sessions" class="content-section">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>会话管理</h2>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#createSessionModal">
                             <i class="fas fa-plus me-2"></i>创建新会话
                         </button>
                     </div>
                     
                     <div id="sessionsList">
-                        <!-- 会话列表将在这里动态加载 -->
+                        <!-- 会话列表将在这里显示 -->
                     </div>
                 </div>
                 
@@ -264,25 +510,15 @@
                 <div id="speakers" class="content-section">
                     <h2 class="mb-4">演讲者管理</h2>
                     <div id="speakersList">
-                        <!-- 演讲者列表将在这里动态加载 -->
+                        <!-- 演讲者列表将在这里显示 -->
                     </div>
                 </div>
                 
                 <!-- 统计分析 -->
-                <div id="statistics" class="content-section">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>统计分析</h2>
-                        <div>
-                            <select class="form-select d-inline-block me-3" id="sessionSelect" style="width: auto;">
-                                <option value="">选择会话</option>
-                            </select>
-                            <button class="btn btn-outline-primary" onclick="loadStatistics()">
-                                <i class="fas fa-sync me-2"></i>刷新数据
-                            </button>
-                        </div>
-                    </div>
-                    <div id="statisticsContent">
-                        <!-- 统计内容将在这里显示 -->
+                <div id="analytics" class="content-section">
+                    <h2 class="mb-4">统计分析</h2>
+                    <div id="analyticsContent">
+                        <!-- 统计分析内容将在这里显示 -->
                     </div>
                 </div>
             </div>
@@ -295,7 +531,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">创建新会话</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="createSessionForm">
@@ -308,28 +544,27 @@
                             <textarea class="form-control" id="sessionDescription" rows="3"></textarea>
                         </div>
                         <div class="mb-3">
-                            <label for="speakerId" class="form-label">演讲者</label>
-                            <select class="form-select" id="speakerId" required>
-                                <option value="">请选择演讲者</option>
+                            <label for="sessionSpeaker" class="form-label">演讲者</label>
+                            <select class="form-select" id="sessionSpeaker" required>
+                                <option value="">选择演讲者</option>
                             </select>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="createSession()">创建</button>
+                    <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-warning" onclick="createSession()">创建会话</button>
                 </div>
             </div>
         </div>
     </div>
 
-    
     <!-- 消息提示 -->
     <div class="toast-container position-fixed top-0 end-0 p-3">
         <div id="messageToast" class="toast" role="alert">
             <div class="toast-header">
                 <strong class="me-auto">系统消息</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
             </div>
             <div class="toast-body" id="toastMessage"></div>
         </div>
