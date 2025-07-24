@@ -79,17 +79,29 @@ class QuizGenerator:
     
     async def _generate_with_qwen_async(self, content_text: str, num_questions: int = 1) -> List[Dict]:
         """
-        使用 Qwen API 异步生成题目（支持20秒超时）
+        使用 Qwen API 异步生成题目（动态超时：75-300秒）
         """
         if not self.client:
             raise Exception("Qwen API 客户端未初始化")
         
         # 构建提示词
+        # 对于超长内容，给AI一些处理建议
+        content_length = len(content_text)
+        content_hint = ""
+        if content_length > 80000:
+            content_hint = f"\n\n注意：内容极其庞大（{content_length}字符），请深度分析全文内容，从中提炼最核心的概念、关键定义、重要理论和实践要点来生成高质量的题目。请确保题目覆盖内容的精华部分。"
+        elif content_length > 50000:
+            content_hint = f"\n\n注意：内容非常庞大（{content_length}字符），请全面分析文本后，重点关注核心概念、关键定义、重要理论和关键信息生成高质量题目。"
+        elif content_length > 30000:
+            content_hint = f"\n\n注意：内容非常长（{content_length}字符），请仔细分析全文后，重点关注核心概念、关键定义和重要信息生成高质量题目。"
+        elif content_length > 15000:
+            content_hint = f"\n\n注意：内容较长（{content_length}字符），请重点关注核心概念和关键信息生成题目。"
+        
         prompt = f"""
 基于以下内容生成 {num_questions} 道选择题。每道题有4个选项，请标明正确答案序号（0-3）和解释。
 
 内容：
-{content_text[:2000]}  # 限制内容长度避免超时
+{content_text}{content_hint}
 
 请严格按照以下JSON格式返回：
 {{
@@ -121,7 +133,7 @@ class QuizGenerator:
                 ],
                 temperature=0.7,
                 max_tokens=2000,
-                timeout=15.0  # 设置15秒超时，为整体20秒超时留出缓冲
+                timeout=60.0  # 增加到60秒超时，为整体动态超时留出充分缓冲
             )
             
             response_text = response.choices[0].message.content
@@ -134,7 +146,7 @@ class QuizGenerator:
     
     def generate_quiz(self, content_text: str, num_questions: int = 1) -> List[Dict]:
         """
-        根据内容文本生成选择题（支持20秒超时）
+        根据内容文本生成选择题（动态超时：75-300秒）
         
         Args:
             content_text: 源内容文本
@@ -148,7 +160,7 @@ class QuizGenerator:
             print("使用模拟题目生成器...")
             return self.mock_generator.generate_quiz(content_text, num_questions)
         
-        # 尝试使用真实的 Qwen API (20秒超时)
+        # 尝试使用真实的 Qwen API (动态超时：75-300秒)
         try:
             print("🔄 正在使用 Qwen API 生成题目...")
             start_time = time.time()
@@ -158,11 +170,34 @@ class QuizGenerator:
             asyncio.set_event_loop(loop)
             
             try:
-                # 设置20秒超时
+                # 根据内容长度动态调整超时时间
+                content_length = len(content_text)
+                if content_length > 100000:
+                    timeout_seconds = 300.0  # 巨型内容使用5分钟超时
+                    print(f"📄 检测到巨型内容（{content_length}字符），使用300秒超时...")
+                elif content_length > 80000:
+                    timeout_seconds = 240.0  # 极大内容使用4分钟超时
+                    print(f"📄 检测到极大内容（{content_length}字符），使用240秒超时...")
+                elif content_length > 50000:
+                    timeout_seconds = 180.0  # 超超长内容使用3分钟超时
+                    print(f"📄 检测到超超长内容（{content_length}字符），使用180秒超时...")
+                elif content_length > 30000:
+                    timeout_seconds = 150.0  # 超长内容使用2.5分钟超时
+                    print(f"📄 检测到超长内容（{content_length}字符），使用150秒超时...")
+                elif content_length > 20000:
+                    timeout_seconds = 120.0  # 很长内容使用2分钟超时
+                    print(f"📄 检测到很长内容（{content_length}字符），使用120秒超时...")
+                elif content_length > 10000:
+                    timeout_seconds = 90.0  # 长内容使用1.5分钟超时
+                    print(f"📄 检测到长内容（{content_length}字符），使用90秒超时...")
+                else:
+                    timeout_seconds = 75.0  # 普通内容使用75秒超时
+                
+                # 设置动态超时
                 result = loop.run_until_complete(
                     asyncio.wait_for(
                         self._generate_with_qwen_async(content_text, num_questions),
-                        timeout=20.0
+                        timeout=timeout_seconds
                     )
                 )
                 

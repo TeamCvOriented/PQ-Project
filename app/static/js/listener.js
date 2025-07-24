@@ -132,6 +132,12 @@ function setupEventListeners() {
 
 // 显示指定的内容区域
 function showSection(sectionName) {
+    // 检查是否尝试访问受限功能
+    if ((sectionName === 'results' || sectionName === 'discussions') && !hasCompletedQuiz()) {
+        showMessage('请先完成答题后再访问此功能', 'warning');
+        return;
+    }
+    
     // 隐藏所有内容区域
     document.querySelectorAll('.content-section').forEach(section => {
         section.classList.remove('active');
@@ -156,9 +162,15 @@ function showSection(sectionName) {
                 checkCurrentQuiz();
                 break;
             case 'results':
+                // 确保答题结果区域可见
+                document.getElementById('resultsSessionSelector').style.display = 'none';
+                document.getElementById('resultsSessionContent').style.display = 'block';
                 refreshResults();
                 break;
             case 'discussions':
+                // 确保讨论区域可见
+                document.getElementById('discussionsSessionSelector').style.display = 'none';
+                document.getElementById('discussionsSessionContent').style.display = 'block';
                 refreshDiscussions();
                 break;
             case 'statistics':
@@ -166,6 +178,13 @@ function showSection(sectionName) {
                 break;
         }
     }
+}
+
+// 检查是否已完成答题
+function hasCompletedQuiz() {
+    // 检查是否显示了答题完成后的功能访问区域
+    const postQuizActions = document.getElementById('postQuizActions');
+    return postQuizActions && postQuizActions.style.display !== 'none';
 }
 
 // 加载可用的会话列表
@@ -535,21 +554,8 @@ async function submitAnswer() {
                 
                 // 检查是否完成了所有题目
                 if (data.all_quizzes_completed) {
-                    // 所有题目已完成，显示完成状态并回到等待页面
-                    const container = document.getElementById('quizContent');
-                    container.innerHTML = `
-                        <div class="text-center waiting-animation">
-                            <i class="fas fa-trophy fa-3x text-warning mb-3"></i>
-                            <h4>🎉 恭喜！</h4>
-                            <p class="text-success">您已完成所有题目</p>
-                            <p class="text-muted">等待演讲者发布新题目...</p>
-                        </div>
-                    `;
-                    
-                    // 2秒后自动显示等待状态
-                    setTimeout(() => {
-                        displayWaitingForQuiz();
-                    }, 2000);
+                    // 所有题目已完成，显示完成状态并启用功能访问
+                    displayCompletionMessage();
                 } else {
                     // 还有下一题，显示加载状态
                     const container = document.getElementById('quizContent');
@@ -563,6 +569,12 @@ async function submitAnswer() {
                             </div>
                         </div>
                     `;
+                    
+                    // 隐藏功能访问区域（因为还有题目要答）
+                    const postQuizActions = document.getElementById('postQuizActions');
+                    if (postQuizActions) {
+                        postQuizActions.style.display = 'none';
+                    }
                     
                     // 立即检查下一题（不等待3秒）
                     setTimeout(() => {
@@ -634,13 +646,14 @@ function displayCompletionMessage() {
             <h4>🎉 恭喜！</h4>
             <p class="text-success">您已完成该会话的所有题目</p>
             <p class="text-muted">感谢您的参与！</p>
-            <div class="mt-3">
-                <button class="btn btn-primary" onclick="showSection('results')">
-                    <i class="fas fa-chart-bar me-2"></i>查看结果
-                </button>
-            </div>
         </div>
     `;
+    
+    // 显示答题完成后的功能访问区域
+    const postQuizActions = document.getElementById('postQuizActions');
+    if (postQuizActions) {
+        postQuizActions.style.display = 'block';
+    }
     
     // 清除计时器
     if (quizTimer) {
@@ -1205,10 +1218,55 @@ function formatDateTime(isoString) {
     });
 }
 
+// 移动端侧边栏切换
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('show');
+}
+
+// 点击主内容区域时关闭侧边栏（移动端）
+document.addEventListener('click', function(e) {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.querySelector('.mobile-toggle');
+    
+    if (window.innerWidth <= 768 && 
+        !sidebar.contains(e.target) && 
+        !toggleBtn.contains(e.target) && 
+        sidebar.classList.contains('show')) {
+        sidebar.classList.remove('show');
+    }
+});
+
+// 窗口大小改变时处理侧边栏显示
+window.addEventListener('resize', function() {
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth > 768) {
+        sidebar.classList.remove('show');
+    }
+});
+
+// 选择反馈类型
+function selectFeedbackType(card) {
+    // 移除所有卡片的选中状态
+    document.querySelectorAll('.feedback-type-card').forEach(c => {
+        c.classList.remove('selected');
+    });
+    
+    // 设置当前卡片为选中状态
+    card.classList.add('selected');
+    selectedFeedbackType = card.getAttribute('data-type');
+    
+    // 添加选中动画效果
+    card.style.transform = 'scale(1.05)';
+    setTimeout(() => {
+        card.style.transform = '';
+    }, 200);
+}
+
 // 提交反馈
 async function submitFeedback() {
     if (!currentSessionId) {
-        showMessage('请先加入会话', 'warning');
+        showMessage('请先选择一个会话', 'warning');
         return;
     }
     
@@ -1217,14 +1275,10 @@ async function submitFeedback() {
         return;
     }
     
-    const content = document.getElementById('feedbackContent').value.trim();
-    if (!content) {
-        showMessage('请输入反馈内容', 'warning');
-        return;
-    }
+    const feedbackContent = document.getElementById('feedbackContent').value.trim();
     
     try {
-        const response = await fetch('/api/quiz/feedback', {
+        const response = await fetch('/api/feedback/submit', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1232,21 +1286,34 @@ async function submitFeedback() {
             body: JSON.stringify({
                 session_id: currentSessionId,
                 feedback_type: selectedFeedbackType,
-                content: content
+                content: feedbackContent
             })
         });
         
-        const data = await response.json();
-        
-        if (data.success) {
-            showMessage('反馈提交成功，感谢您的建议！', 'success');
+        if (response.ok) {
+            showMessage('反馈提交成功！', 'success');
             
             // 清空表单
             document.getElementById('feedbackContent').value = '';
-            document.querySelectorAll('.feedback-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.feedback-type-card').forEach(c => {
+                c.classList.remove('selected');
+            });
             selectedFeedbackType = null;
+            
+            // 添加提交成功的视觉反馈
+            const submitBtn = document.querySelector('.feedback-submit-btn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-check me-2"></i>提交成功！';
+            submitBtn.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+            
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.style.background = '';
+            }, 2000);
+            
         } else {
-            showMessage(data.message || '提交反馈失败', 'error');
+            const errorData = await response.json();
+            showMessage(errorData.message || '提交反馈失败', 'error');
         }
     } catch (error) {
         console.error('提交反馈失败:', error);
@@ -1283,79 +1350,145 @@ async function refreshStatistics() {
 
 // 显示成绩统计
 function displayStatistics(data) {
-    const container = document.getElementById('statisticsContent');
+    // 更新统计数据
+    document.getElementById('accuracyRate').textContent = data.accuracy ? `${data.accuracy.toFixed(1)}%` : '--';
+    document.getElementById('totalQuestions').textContent = data.total_answered || '--';
+    document.getElementById('correctAnswers').textContent = data.correct_answered || '--';
+    document.getElementById('avgTime').textContent = data.avg_time ? `${data.avg_time}s` : '--';
     
-    container.innerHTML = `
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-primary">${data.total_answered}</h5>
-                        <p class="card-text">已答题数</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-success">${data.correct_answered}</h5>
-                        <p class="card-text">答对题数</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-warning">${data.accuracy.toFixed(1)}%</h5>
-                        <p class="card-text">正确率</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5 class="card-title text-info">${data.rank}</h5>
-                        <p class="card-text">排名</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+    // 更新正确率卡片样式
+    const accuracyCard = document.querySelector('.stats-card.accuracy-excellent');
+    if (accuracyCard && data.accuracy !== undefined) {
+        accuracyCard.className = 'stats-card';
+        if (data.accuracy >= 90) {
+            accuracyCard.classList.add('accuracy-excellent');
+        } else if (data.accuracy >= 75) {
+            accuracyCard.classList.add('accuracy-good');
+        } else if (data.accuracy >= 60) {
+            accuracyCard.classList.add('accuracy-average');
+        } else {
+            accuracyCard.classList.add('accuracy-poor');
+        }
+    }
+    
+    // 更新环形进度条
+    const progressCircle = document.getElementById('progressCircle');
+    const progressText = document.getElementById('progressText');
+    const performanceBadge = document.getElementById('performanceBadge');
+    
+    if (data.accuracy !== undefined) {
+        const percentage = data.accuracy;
+        const circumference = 2 * Math.PI * 52; // r=52
+        const offset = circumference - (percentage / 100) * circumference;
         
-        ${data.leaderboard && data.leaderboard.length > 0 ? `
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-trophy me-2"></i>排行榜</h5>
+        progressCircle.style.strokeDashoffset = offset;
+        progressText.textContent = `${percentage.toFixed(1)}%`;
+        
+        // 更新进度条颜色和徽章
+        progressCircle.className = 'progress';
+        if (percentage >= 90) {
+            progressCircle.classList.add('excellent');
+            performanceBadge.className = 'badge bg-success';
+            performanceBadge.textContent = '优秀表现';
+        } else if (percentage >= 75) {
+            progressCircle.classList.add('good');
+            performanceBadge.className = 'badge bg-info';
+            performanceBadge.textContent = '良好表现';
+        } else if (percentage >= 60) {
+            progressCircle.classList.add('average');
+            performanceBadge.className = 'badge bg-warning';
+            performanceBadge.textContent = '一般表现';
+        } else {
+            progressCircle.classList.add('poor');
+            performanceBadge.className = 'badge bg-danger';
+            performanceBadge.textContent = '需要努力';
+        }
+    }
+    
+    // 更新成绩等级
+    const gradeIcon = document.getElementById('gradeIcon');
+    const gradeLevel = document.getElementById('gradeLevel');
+    const gradeMessage = document.getElementById('gradeMessage');
+    
+    if (data.accuracy !== undefined) {
+        if (data.accuracy >= 90) {
+            gradeIcon.className = 'fas fa-star';
+            gradeIcon.style.color = '#ffd700';
+            gradeLevel.textContent = 'A级';
+            gradeLevel.className = 'text-warning mb-2';
+            gradeMessage.textContent = '优秀！继续保持！';
+        } else if (data.accuracy >= 75) {
+            gradeIcon.className = 'fas fa-medal';
+            gradeIcon.style.color = '#17a2b8';
+            gradeLevel.textContent = 'B级';
+            gradeLevel.className = 'text-info mb-2';
+            gradeMessage.textContent = '良好表现，再接再厉！';
+        } else if (data.accuracy >= 60) {
+            gradeIcon.className = 'fas fa-certificate';
+            gradeIcon.style.color = '#ffc107';
+            gradeLevel.textContent = 'C级';
+            gradeLevel.className = 'text-warning mb-2';
+            gradeMessage.textContent = '还有提升空间！';
+        } else {
+            gradeIcon.className = 'fas fa-exclamation-triangle';
+            gradeIcon.style.color = '#dc3545';
+            gradeLevel.textContent = 'D级';
+            gradeLevel.className = 'text-danger mb-2';
+            gradeMessage.textContent = '需要加强练习！';
+        }
+    }
+    
+    // 更新答题历史
+    const historyList = document.getElementById('quizHistoryList');
+    if (data.quiz_history && data.quiz_history.length > 0) {
+        historyList.innerHTML = data.quiz_history.map(quiz => `
+            <div class="quiz-history-item ${quiz.is_correct ? 'correct' : 'incorrect'}">
+                <div class="quiz-history-icon ${quiz.is_correct ? 'correct' : 'incorrect'}">
+                    <i class="fas fa-${quiz.is_correct ? 'check' : 'times'}"></i>
                 </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>排名</th>
-                                    <th>用户</th>
-                                    <th>答对题数</th>
-                                    <th>正确率</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.leaderboard.map((user, index) => `
-                                    <tr class="${user.user_id === data.user_id ? 'table-warning' : ''}">
-                                        <td>
-                                            ${index + 1}
-                                            ${index === 0 ? '<i class="fas fa-crown text-warning ms-1"></i>' : ''}
-                                        </td>
-                                        <td>${user.nickname || user.username}</td>
-                                        <td>${user.correct_answered}</td>
-                                        <td>${user.accuracy.toFixed(1)}%</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="quiz-history-content">
+                    <div class="quiz-history-title">题目 #${quiz.quiz_id}: ${quiz.question || '题目内容'}</div>
+                    <div class="quiz-history-time">${quiz.time_ago} · 用时 ${quiz.answer_time || '--'}秒</div>
                 </div>
             </div>
-        ` : ''}
-    `;
+        `).join('');
+    } else {
+        historyList.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <p>暂无答题记录</p>
+            </div>
+        `;
+    }
+    
+    // 更新排行榜
+    const rankingList = document.getElementById('rankingList');
+    if (data.leaderboard && data.leaderboard.length > 0) {
+        rankingList.innerHTML = data.leaderboard.map((user, index) => {
+            const isCurrentUser = user.user_id === data.user_id;
+            let positionClass = 'other';
+            if (index === 0) positionClass = 'first';
+            else if (index === 1) positionClass = 'second';
+            else if (index === 2) positionClass = 'third';
+            
+            return `
+                <div class="ranking-item ${isCurrentUser ? 'current-user' : ''}">
+                    <div class="ranking-position ${positionClass}">${index + 1}</div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">${user.nickname || user.username}${isCurrentUser ? ' (我)' : ''}</div>
+                        <div class="ranking-score">正确率: ${user.accuracy.toFixed(1)}% · 总分: ${user.total_score || (user.correct_answered * 10)}分</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        rankingList.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-users fa-3x mb-3"></i>
+                <p>暂无排行数据</p>
+            </div>
+        `;
+    }
 }
 
 // 通用消息提示
@@ -1404,7 +1537,8 @@ function selectSession(sessionId, sessionTitle) {
 
 // 启用导航功能
 function enableNavigation() {
-    const navItems = ['quizNavItem', 'resultsNavItem', 'discussionsNavItem', 'feedbackNavItem', 'statisticsNavItem'];
+    // 只启用基本导航项，不包括答题结果和讨论区
+    const navItems = ['quizNavItem', 'feedbackNavItem', 'statisticsNavItem'];
     navItems.forEach(itemId => {
         const item = document.getElementById(itemId);
         if (item) {
@@ -1413,8 +1547,8 @@ function enableNavigation() {
     });
     
     // 隐藏所有区域的会话选择提示，显示内容
-    const sessionSelectors = ['quizSessionSelector', 'resultsSessionSelector', 'discussionsSessionSelector', 'feedbackSessionSelector', 'statisticsSessionSelector'];
-    const sessionContents = ['quizSessionContent', 'resultsSessionContent', 'discussionsSessionContent', 'feedbackSessionContent', 'statisticsSessionContent'];
+    const sessionSelectors = ['quizSessionSelector', 'feedbackSessionSelector', 'statisticsSessionSelector'];
+    const sessionContents = ['quizSessionContent', 'feedbackSessionContent', 'statisticsSessionContent'];
     
     sessionSelectors.forEach(selectorId => {
         const selector = document.getElementById(selectorId);

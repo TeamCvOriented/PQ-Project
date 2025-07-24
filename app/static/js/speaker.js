@@ -612,7 +612,29 @@ async function generateAIQuizzes() {
         if (response.ok) {
             const result = await response.json();
             if (result.success) {
-                showMessage(`成功基于${uploadedFiles.length}个文件生成${result.questions.length}道题目`, 'success');
+                // 构建详细的成功消息
+                let successMessage = `成功基于${uploadedFiles.length}个文件生成${result.questions.length}道题目`;
+                
+                // 如果有题目分配信息，显示更详细的信息
+                if (result.file_info && result.file_info.questions_distribution) {
+                    const dist = result.file_info.questions_distribution;
+                    successMessage += `\n📊 题目分配：每个文件${dist.questions_per_file}道题`;
+                    if (dist.remaining_questions > 0) {
+                        successMessage += `，前${dist.remaining_questions}个文件额外+1道题`;
+                    }
+                }
+                
+                // 显示处理的文件信息
+                if (result.processed_files && result.processed_files.length > 0) {
+                    successMessage += `\n📁 成功处理文件：${result.processed_files.join(', ')}`;
+                }
+                
+                // 显示失败的文件信息
+                if (result.failed_files && result.failed_files.length > 0) {
+                    successMessage += `\n⚠️ 处理失败：${result.failed_files.join(', ')}`;
+                }
+                
+                showMessage(successMessage, 'success');
                 
                 // 显示生成的题目
                 displayGeneratedQuizzes(result.questions, sessionId);
@@ -657,7 +679,10 @@ function displayGeneratedQuizzes(questions, sessionId) {
         ${questions.map((quiz, index) => `
             <div class="card quiz-card mb-3" data-quiz-index="${index}">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">题目 ${index + 1}</h6>
+                    <div>
+                        <h6 class="mb-0">题目 ${index + 1}</h6>
+                        ${quiz.source_file ? `<small class="text-muted"><i class="fas fa-file me-1"></i>来源：${quiz.source_file}</small>` : ''}
+                    </div>
                     <div>
                         <button class="btn btn-primary btn-sm me-2" onclick="sendSingleQuizToAudience(${index})">
                             <i class="fas fa-paper-plane me-1"></i>发送给听众

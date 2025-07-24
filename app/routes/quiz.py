@@ -757,8 +757,8 @@ def upload_multiple_files_and_generate_quiz():
         if pq_session.speaker_id != user_id and pq_session.organizer_id != user_id:
             return jsonify({'success': False, 'message': '权限不足'}), 403
         
-        # 处理所有文件并合并文本内容
-        all_text_content = []
+        # 处理所有文件并为每个文件分别生成题目
+        all_file_contents = []  # 存储每个文件的内容和信息
         processed_files = []
         failed_files = []
         
@@ -792,7 +792,11 @@ def upload_multiple_files_and_generate_quiz():
                         text_content = file_processor.extract_text_from_ppt_bytes(file_content)
                     
                     if text_content and len(text_content.strip()) > 20:
-                        all_text_content.append(f"=== 文件: {file.filename} ===\n{text_content}")
+                        all_file_contents.append({
+                            'filename': file.filename,
+                            'content': text_content,
+                            'length': len(text_content)
+                        })
                         processed_files.append(file.filename)
                     else:
                         failed_files.append(f"{file.filename} (无法提取文本)")
@@ -801,40 +805,72 @@ def upload_multiple_files_and_generate_quiz():
                     failed_files.append(f"{file.filename} (处理失败: {str(e)})")
                     continue
             
-            if not all_text_content:
+            if not all_file_contents:
                 return jsonify({'success': False, 'message': '没有成功处理的文件，无法生成题目'}), 400
             
-            # 合并所有文本内容
-            combined_text = '\n\n'.join(all_text_content)
+            # 计算每个文件应该生成的题目数量
+            total_files = len(all_file_contents)
+            questions_per_file = max(1, num_questions // total_files)  # 每个文件至少1题
+            remaining_questions = num_questions - (questions_per_file * total_files)
             
-            if len(combined_text.strip()) < 100:
-                return jsonify({'success': False, 'message': '文件内容太少，无法生成题目。需要至少100个字符的文本内容。'}), 400
+            print(f"成功处理{total_files}个文件，每个文件生成{questions_per_file}道题目，剩余{remaining_questions}道题目")
             
-            print(f"成功处理{len(processed_files)}个文件，合并文本长度: {len(combined_text)}")
-            
-            # 使用AI生成题目
+            # 为每个文件分别生成题目
             quiz_generator = QuizGenerator()
-            generated_quizzes = quiz_generator.generate_quiz(combined_text, num_questions=num_questions)
+            all_generated_quizzes = []
             
-            if not generated_quizzes:
+            for i, file_info in enumerate(all_file_contents):
+                # 计算当前文件应生成的题目数
+                current_questions = questions_per_file
+                if i < remaining_questions:  # 剩余题目分配给前几个文件
+                    current_questions += 1
+                
+                print(f"🔄 为文件 '{file_info['filename']}' 生成 {current_questions} 道题目...")
+                
+                # 为当前文件生成题目
+                file_quizzes = quiz_generator.generate_quiz(file_info['content'], num_questions=current_questions)
+                
+                if file_quizzes:
+                    # 给每道题添加来源文件信息
+                    for quiz in file_quizzes:
+                        quiz['source_file'] = file_info['filename']
+                        if 'explanation' in quiz:
+                            quiz['explanation'] += f" (来源：{file_info['filename']})"
+                        else:
+                            quiz['explanation'] = f"来源：{file_info['filename']}"
+                    
+                    all_generated_quizzes.extend(file_quizzes)
+                    print(f"✅ 文件 '{file_info['filename']}' 成功生成 {len(file_quizzes)} 道题目")
+                else:
+                    print(f"❌ 文件 '{file_info['filename']}' 生成题目失败")
+            
+            if not all_generated_quizzes:
                 return jsonify({'success': False, 'message': 'AI生成题目失败，请检查文件内容或稍后重试'}), 500
             
             # 构建响应消息
-            message = f'成功基于{len(processed_files)}个文件生成{len(generated_quizzes)}道题目'
+            message = f'成功基于{len(processed_files)}个文件生成{len(all_generated_quizzes)}道题目'
             if failed_files:
                 message += f'，{len(failed_files)}个文件处理失败'
+            
+            # 统计信息
+            total_content_length = sum(file_info['length'] for file_info in all_file_contents)
             
             return jsonify({
                 'success': True,
                 'message': message,
-                'questions': generated_quizzes,
+                'questions': all_generated_quizzes,
                 'processed_files': processed_files,
                 'failed_files': failed_files,
                 'file_info': {
                     'total_files': len(files),
                     'processed_count': len(processed_files),
                     'failed_count': len(failed_files),
-                    'combined_text_length': len(combined_text)
+                    'total_content_length': total_content_length,
+                    'questions_distribution': {
+                        'questions_per_file': questions_per_file,
+                        'remaining_questions': remaining_questions,
+                        'actual_generated': len(all_generated_quizzes)
+                    }
                 }
             })
             

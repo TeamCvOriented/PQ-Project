@@ -6,140 +6,867 @@
     <title>听众界面 - PQ-Project</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --dark-gradient: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            --sidebar-gradient: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+            --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            --hover-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+            --border-radius: 15px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        /* 侧边栏美化 */
         .sidebar {
-            background: #28a745;
+            background: var(--sidebar-gradient);
             min-height: 100vh;
             color: white;
+            box-shadow: var(--card-shadow);
+            position: relative;
+            overflow: hidden;
         }
+
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/><circle cx="20" cy="80" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            pointer-events: none;
+        }
+
         .sidebar .nav-link {
-            color: #c3e6cb;
-            transition: all 0.3s;
+            color: rgba(255, 255, 255, 0.8);
+            transition: var(--transition);
+            border-radius: var(--border-radius);
+            margin-bottom: 8px;
+            padding: 12px 16px;
+            position: relative;
+            overflow: hidden;
         }
+
+        .sidebar .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: var(--transition);
+        }
+
+        .sidebar .nav-link:hover::before {
+            left: 100%;
+        }
+
         .sidebar .nav-link:hover, .sidebar .nav-link.active {
             color: white;
-            background-color: #218838;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         }
-        .sidebar .nav-link:disabled {
-            color: #6c757d;
-            background-color: transparent;
-            cursor: not-allowed;
+
+        .sidebar .nav-link i {
+            width: 20px;
+            text-align: center;
         }
+
+        /* 用户信息区域美化 */
+        .user-info-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            background: var(--success-gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 24px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 主内容区域美化 */
+        .main-content {
+            padding: 30px;
+            background: transparent;
+        }
+
         .content-section {
             display: none;
+            animation: fadeInUp 0.5s ease-out;
         }
+
         .content-section.active {
             display: block;
         }
-        .stats-card {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 卡片美化 */
+        .modern-card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            border: none;
+            transition: var(--transition);
+            overflow: hidden;
+        }
+
+        .modern-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--hover-shadow);
+        }
+
+        .modern-card .card-header {
+            background: var(--primary-gradient);
             color: white;
-            border-radius: 15px;
+            border: none;
             padding: 20px;
+            font-weight: 600;
         }
+
+        .modern-card .card-body {
+            padding: 25px;
+        }
+
+        /* 会话卡片美化 */
         .session-card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
             border: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-            cursor: pointer;
-        }
-        .session-card:hover {
-            transform: translateY(-2px);
-        }
-        .quiz-card {
-            border: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
+            transition: var(--transition);
+            overflow: hidden;
             margin-bottom: 20px;
         }
-        .quiz-card:hover {
-            transform: translateY(-2px);
+
+        .session-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--hover-shadow);
         }
+
+        .session-card .card-body {
+            padding: 25px;
+            position: relative;
+        }
+
+        .session-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--success-gradient);
+        }
+
+        /* 按钮美化 */
+        .modern-btn {
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 500;
+            transition: var(--transition);
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .modern-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: var(--transition);
+        }
+
+        .modern-btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary.modern-btn {
+            background: var(--primary-gradient);
+        }
+
+        .btn-success.modern-btn {
+            background: var(--success-gradient);
+        }
+
+        .btn-info.modern-btn {
+            background: var(--info-gradient);
+        }
+
+        .btn-warning.modern-btn {
+            background: var(--warning-gradient);
+        }
+
+        /* 题目卡片美化 */
+        .quiz-card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            border: none;
+            transition: var(--transition);
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .quiz-card .card-header {
+            background: var(--info-gradient);
+            color: white;
+            border: none;
+            padding: 20px;
+            font-weight: 600;
+        }
+
+        .quiz-card .card-body {
+            padding: 30px;
+        }
+
+        /* 选项按钮美化 */
         .option-btn {
-            transition: all 0.3s ease;
-            margin-bottom: 10px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: var(--border-radius);
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            transition: var(--transition);
+            text-align: left;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
         }
+
+        .option-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 123, 255, 0.1), transparent);
+            transition: var(--transition);
+        }
+
+        .option-btn:hover::before {
+            left: 100%;
+        }
+
         .option-btn:hover {
+            border-color: #007bff;
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0, 123, 255, 0.2);
+        }
+
+        .option-btn.selected {
+            background: var(--primary-gradient);
+            color: white;
+            border-color: transparent;
             transform: scale(1.02);
         }
-        .option-btn.selected {
-            background-color: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
+
         .option-btn.correct {
-            background-color: #28a745;
+            background: var(--success-gradient);
             color: white;
-            border-color: #28a745;
+            border-color: transparent;
         }
+
         .option-btn.incorrect {
-            background-color: #dc3545;
+            background: var(--warning-gradient);
             color: white;
-            border-color: #dc3545;
+            border-color: transparent;
         }
+
+        /* 计时器美化 */
         .timer {
+            background: var(--warning-gradient);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            box-shadow: var(--card-shadow);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        /* 当前会话信息美化 */
+        .current-session-info {
+            background: var(--success-gradient);
+            color: white;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: var(--card-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .current-session-info::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+
+        /* 等待动画美化 */
+        .waiting-animation {
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .waiting-animation i {
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-30px); }
+            60% { transform: translateY(-15px); }
+        }
+
+        /* 功能访问区域美化 */
+        #postQuizActions .card {
+            background: var(--success-gradient);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+        }
+
+        #postQuizActions .card-header {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+
+        #postQuizActions .btn {
+            background: white;
+            color: #333;
+            border: none;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        #postQuizActions .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -100%;
+                width: 280px;
+                z-index: 1050;
+                transition: var(--transition);
+            }
+
+            .sidebar.show {
+                left: 0;
+            }
+
+            .main-content {
+                padding: 20px 15px;
+            }
+
+            .mobile-toggle {
+                position: fixed;
+                top: 20px;
+                left: 20px;
+                z-index: 1051;
+                background: var(--primary-gradient);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 50px;
+                height: 50px;
+                box-shadow: var(--card-shadow);
+            }
+        }
+
+        /* 加载动画 */
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 消息提示美化 */
+        .alert {
+            border-radius: var(--border-radius);
+            border: none;
+            box-shadow: var(--card-shadow);
+            animation: slideInDown 0.5s ease-out;
+        }
+
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-gradient);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--dark-gradient);
+        }
+
+        /* 统计页面样式 */
+        .statistics-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: var(--border-radius);
+            padding: 0;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 30px;
+        }
+
+        .statistics-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 25px;
+            border: none;
+            position: relative;
+        }
+
+        .statistics-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .statistics-body {
+            background: white;
+            padding: 30px;
+        }
+
+        .stats-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stats-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stats-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: var(--transition);
+        }
+
+        .stats-card:hover::before {
+            left: 100%;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats-card.accuracy-excellent {
+            border-color: #28a745;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+
+        .stats-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            display: block;
+            opacity: 0.8;
+        }
+
+        .stats-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .stats-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .stats-chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .progress-ring {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+        }
+
+        .progress-ring svg {
+            width: 120px;
+            height: 120px;
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring circle {
+            fill: none;
+            stroke-width: 8;
+        }
+
+        .progress-ring circle.bg {
+            stroke: #e9ecef;
+        }
+
+        .progress-ring circle.progress {
+            stroke: #28a745;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease-in-out;
+        }
+
+        .progress-ring circle.progress.excellent {
+            stroke: #28a745;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             font-size: 1.5rem;
             font-weight: bold;
-            color: #dc3545;
+            color: #28a745;
         }
-        .discussion-message {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 10px;
-            margin-bottom: 10px;
+
+        .quiz-history {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 30px;
         }
-        .discussion-input {
-            border-radius: 20px;
-        }
-        
-        /* 新增讨论区样式 */
-        .quiz-discussion-item {
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid #dee2e6;
-        }
-        .quiz-discussion-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border-color: #007bff;
-        }
-        .quiz-discussions-list {
-            max-height: 60vh;
-            overflow-y: auto;
-        }
-        .quiz-info {
-            background: #f8f9fa !important;
-        }
-        .stats-info {
-            background: #fff3cd !important;
-            border-color: #ffeaa7 !important;
-        }
-        .discussion-message {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-        }
-        #quizDiscussionDetail {
-            border-top: 3px solid #007bff;
-            margin-top: 2rem;
-            padding-top: 1rem;
-        }
-        .ranking-item {
-            background: #f8f9fa;
-            border-radius: 10px;
+
+        .quiz-history-item {
+            display: flex;
+            align-items: center;
             padding: 15px;
-            margin-bottom: 10px;
-            transition: all 0.3s ease;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            transition: var(--transition);
+            background: #f8f9fa;
         }
+
+        .quiz-history-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .quiz-history-item.correct {
+            border-left: 4px solid #28a745;
+        }
+
+        .quiz-history-item.incorrect {
+            border-left: 4px solid #dc3545;
+        }
+
+        .quiz-history-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .quiz-history-icon.correct {
+            background: #28a745;
+        }
+
+        .quiz-history-icon.incorrect {
+            background: #dc3545;
+        }
+
+        .quiz-history-content {
+            flex: 1;
+        }
+
+        .quiz-history-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .quiz-history-time {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .ranking-section {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 0;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+        }
+
+        .ranking-header {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: white;
+            padding: 20px 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 20px 25px;
+            border-bottom: 1px solid #e9ecef;
+            transition: var(--transition);
+        }
+
+        .ranking-item:last-child {
+            border-bottom: none;
+        }
+
         .ranking-item:hover {
-            background: #e9ecef;
+            background: #f8f9fa;
         }
+
         .ranking-item.current-user {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(135deg, #28a745, #20c997);
             color: white;
         }
-        .feedback-btn {
-            margin: 5px;
+
+        .ranking-item.current-user:hover {
+            background: linear-gradient(135deg, #20c997, #28a745);
         }
+
+        .ranking-position {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-right: 20px;
+            color: white;
+        }
+
+        .ranking-position.first {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+        }
+
+        .ranking-position.second {
+            background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+            color: #333;
+        }
+
+        .ranking-position.third {
+            background: linear-gradient(135deg, #cd7f32, #daa520);
+        }
+
+        .ranking-position.other {
+            background: linear-gradient(135deg, #6c757d, #495057);
+        }
+
+        .ranking-info {
+            flex: 1;
+        }
+
+        .ranking-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .ranking-score {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 25px;
+            color: white;
+            font-weight: 500;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .refresh-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: var(--transition);
+        }
+
+        .refresh-btn:hover::before {
+            left: 100%;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        /* 其他现有样式保持不变 */
+        .discussion-message {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid var(--primary-gradient);
+        }
+
+        .quiz-discussion-item {
+            cursor: pointer;
+            transition: var(--transition);
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
+        }
+
+        .quiz-discussion-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--hover-shadow);
+            border-color: #007bff;
+        }
+
+        .ranking-item {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: var(--transition);
+            box-shadow: var(--card-shadow);
+        }
+
+        .ranking-item:hover {
+            transform: translateY(-2px);
+        }
+
+        .ranking-item.current-user {
+            background: var(--success-gradient);
+            color: white;
+        }
+
         .progress-circle {
             width: 100px;
             height: 100px;
@@ -151,279 +878,1015 @@
             font-weight: bold;
             color: white;
         }
+
         .accuracy-high {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: var(--success-gradient);
         }
+
         .accuracy-medium {
-            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            background: var(--warning-gradient);
         }
+
         .accuracy-low {
-            background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+            background: var(--warning-gradient);
         }
-        .quiz-result-card {
-            border-left: 4px solid #28a745;
+
+        /* 反馈部分美化 */
+        .feedback-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: var(--border-radius);
+            padding: 0;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 30px;
         }
-        .quiz-result-card.incorrect {
-            border-left-color: #dc3545;
-        }
-        .waiting-animation {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        .session-selector {
-            background: #e3f2fd;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .current-session-info {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+
+        .feedback-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
             color: white;
-            border-radius: 10px;
+            padding: 25px;
+            border: none;
+            position: relative;
+        }
+
+        .feedback-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .feedback-body {
+            background: white;
+            padding: 30px;
+        }
+
+        .feedback-type-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .feedback-type-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feedback-type-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: var(--transition);
+        }
+
+        .feedback-type-card:hover::before {
+            left: 100%;
+        }
+
+        .feedback-type-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .feedback-type-card.selected {
+            border-color: #007bff;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .feedback-type-card .icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .feedback-type-card .title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .feedback-type-card .description {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .feedback-type-card.selected .description {
+            opacity: 1;
+        }
+
+        /* 不同类型的反馈卡片颜色 */
+        .feedback-type-card[data-type="too_fast"]:not(.selected) {
+            border-color: #ffc107;
+        }
+
+        .feedback-type-card[data-type="too_fast"].selected {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+        }
+
+        .feedback-type-card[data-type="too_slow"]:not(.selected) {
+            border-color: #17a2b8;
+        }
+
+        .feedback-type-card[data-type="too_slow"].selected {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+        }
+
+        .feedback-type-card[data-type="boring"]:not(.selected) {
+            border-color: #6c757d;
+        }
+
+        .feedback-type-card[data-type="boring"].selected {
+            background: linear-gradient(135deg, #6c757d, #545b62);
+        }
+
+        .feedback-type-card[data-type="bad_question"]:not(.selected) {
+            border-color: #dc3545;
+        }
+
+        .feedback-type-card[data-type="bad_question"].selected {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+        }
+
+        .feedback-type-card[data-type="environment"]:not(.selected) {
+            border-color: #28a745;
+        }
+
+        .feedback-type-card[data-type="environment"].selected {
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+        }
+
+        .feedback-textarea {
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            font-size: 1rem;
+            transition: var(--transition);
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .feedback-textarea:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+            outline: none;
+        }
+
+        .feedback-submit-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            border-radius: 25px;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feedback-submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: var(--transition);
+        }
+
+        .feedback-submit-btn:hover::before {
+            left: 100%;
+        }
+
+        .feedback-submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .feedback-info-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: none;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+        }
+
+        .feedback-info-header {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+            padding: 20px;
+        }
+
+        .feedback-info-body {
+            padding: 25px;
+        }
+
+        .feedback-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .feedback-stat-item {
+            text-align: center;
             padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .feedback-stat-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .feedback-stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        /* 成绩统计部分美化 */
+        .statistics-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: var(--border-radius);
+            padding: 0;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 30px;
+        }
+
+        .statistics-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 25px;
+            border: none;
+            position: relative;
+        }
+
+        .statistics-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .statistics-body {
+            background: white;
+            padding: 30px;
+        }
+
+        .stats-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stats-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition);
+            border: 2px solid transparent;
+        }
+
+        .stats-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: var(--transition);
+        }
+
+        .stats-card:hover::before {
+            left: 100%;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats-card.accuracy-excellent {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+
+        .stats-card.accuracy-good {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            color: white;
+        }
+
+        .stats-card.accuracy-average {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: white;
+        }
+
+        .stats-card.accuracy-poor {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+        }
+
+        .stats-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stats-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .stats-chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 25px;
+        }
+
+        .progress-ring {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+            position: relative;
+        }
+
+        .progress-ring svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring circle {
+            fill: none;
+            stroke-width: 8;
+        }
+
+        .progress-ring .bg {
+            stroke: #e9ecef;
+        }
+
+        .progress-ring .progress {
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease-in-out;
+        }
+
+        .progress-ring .progress.excellent {
+            stroke: #28a745;
+        }
+
+        .progress-ring .progress.good {
+            stroke: #17a2b8;
+        }
+
+        .progress-ring .progress.average {
+            stroke: #ffc107;
+        }
+
+        .progress-ring .progress.poor {
+            stroke: #dc3545;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .quiz-history {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .quiz-history-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            transition: var(--transition);
+            border-left: 4px solid #dee2e6;
+        }
+
+        .quiz-history-item:hover {
+            background: #f8f9fa;
+            transform: translateX(5px);
+        }
+
+        .quiz-history-item.correct {
+            border-left-color: #28a745;
+            background: rgba(40, 167, 69, 0.05);
+        }
+
+        .quiz-history-item.incorrect {
+            border-left-color: #dc3545;
+            background: rgba(220, 53, 69, 0.05);
+        }
+
+        .quiz-history-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 1.2rem;
+        }
+
+        .quiz-history-icon.correct {
+            background: #28a745;
+            color: white;
+        }
+
+        .quiz-history-icon.incorrect {
+            background: #dc3545;
+            color: white;
+        }
+
+        .quiz-history-content {
+            flex: 1;
+        }
+
+        .quiz-history-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .quiz-history-time {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .ranking-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: var(--card-shadow);
+            margin-top: 25px;
+        }
+
+        .ranking-header {
+            display: flex;
+            align-items: center;
             margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: var(--transition);
+            background: #f8f9fa;
+        }
+
+        .ranking-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .ranking-item.current-user {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+        }
+
+        .ranking-position {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .ranking-position.first {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+        }
+
+        .ranking-position.second {
+            background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+            color: #333;
+        }
+
+        .ranking-position.third {
+            background: linear-gradient(135deg, #cd7f32, #daa520);
+            color: white;
+        }
+
+        .ranking-position.other {
+            background: #6c757d;
+            color: white;
+        }
+
+        .ranking-info {
+            flex: 1;
+        }
+
+        .ranking-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .ranking-score {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 25px;
+            font-weight: 600;
+            color: white;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .refresh-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: var(--transition);
+        }
+
+        .refresh-btn:hover::before {
+            left: 100%;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.4);
         }
     </style>
 </head>
 <body>
+    <!-- 移动端菜单切换按钮 -->
+    <button class="mobile-toggle d-md-none" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+
     <div class="container-fluid">
         <div class="row">
             <!-- 侧边栏 -->
-            <div class="col-md-3 col-lg-2 sidebar p-3">
-                <div class="text-center mb-4">
-                    <i class="fas fa-user-friends fa-2x mb-2"></i>
-                    <h5>听众控制台</h5>
-                    <small class="text-light" id="userInfo">加载中...</small>
+            <div class="col-md-3 col-lg-2 sidebar p-0" id="sidebar">
+                <div class="p-3">
+                    <div class="user-info-section text-center">
+                        <div class="user-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <h5 class="mb-1">听众控制台</h5>
+                        <small class="text-light" id="userInfo">加载中...</small>
+                    </div>
+                    
+                    <ul class="nav nav-pills flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" data-section="sessions">
+                                <i class="fas fa-calendar me-2"></i>我的会话
+                            </a>
+                        </li>
+                        <!-- 以下导航项初始时隐藏，选择会话后显示 -->
+                        <li class="nav-item" id="quizNavItem" style="display: none;">
+                            <a class="nav-link" href="#" data-section="quiz" id="quizNavLink">
+                                <i class="fas fa-question-circle me-2"></i>当前题目
+                            </a>
+                        </li>
+                        <!-- 移除答题结果和讨论区导航项，这些功能将在答题完成后通过其他方式访问 -->
+                        <li class="nav-item" id="feedbackNavItem" style="display: none;">
+                            <a class="nav-link" href="#" data-section="feedback" id="feedbackNavLink">
+                                <i class="fas fa-comment-dots me-2"></i>反馈
+                            </a>
+                        </li>
+                        <li class="nav-item" id="statisticsNavItem" style="display: none;">
+                            <a class="nav-link" href="#" data-section="statistics" id="statisticsNavLink">
+                                <i class="fas fa-trophy me-2"></i>成绩统计
+                            </a>
+                        </li>
+                        <li class="nav-item mt-auto">
+                            <a class="nav-link text-light" href="#" onclick="logout()">
+                                <i class="fas fa-sign-out-alt me-2"></i>退出
+                            </a>
+                        </li>
+                    </ul>
                 </div>
-                
-                <ul class="nav nav-pills flex-column">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="#" data-section="sessions">
-                            <i class="fas fa-calendar me-2"></i>我的会话
-                        </a>
-                    </li>
-                    <!-- 以下导航项初始时隐藏，选择会话后显示 -->
-                    <li class="nav-item" id="quizNavItem" style="display: none;">
-                        <a class="nav-link" href="#" data-section="quiz" id="quizNavLink">
-                            <i class="fas fa-question-circle me-2"></i>当前题目
-                        </a>
-                    </li>
-                    <li class="nav-item" id="resultsNavItem" style="display: none;">
-                        <a class="nav-link" href="#" data-section="results" id="resultsNavLink">
-                            <i class="fas fa-chart-line me-2"></i>答题结果
-                        </a>
-                    </li>
-                    <li class="nav-item" id="discussionsNavItem" style="display: none;">
-                        <a class="nav-link" href="#" data-section="discussions" id="discussionsNavLink">
-                            <i class="fas fa-comments me-2"></i>讨论区
-                        </a>
-                    </li>
-                    <li class="nav-item" id="feedbackNavItem" style="display: none;">
-                        <a class="nav-link" href="#" data-section="feedback" id="feedbackNavLink">
-                            <i class="fas fa-comment-dots me-2"></i>反馈
-                        </a>
-                    </li>
-                    <li class="nav-item" id="statisticsNavItem" style="display: none;">
-                        <a class="nav-link" href="#" data-section="statistics" id="statisticsNavLink">
-                            <i class="fas fa-trophy me-2"></i>成绩统计
-                        </a>
-                    </li>
-                    <li class="nav-item mt-auto">
-                        <a class="nav-link text-light" href="#" onclick="logout()">
-                            <i class="fas fa-sign-out-alt me-2"></i>退出
-                        </a>
-                    </li>
-                </ul>
             </div>
-            
+                
             <!-- 主内容区 -->
-            <div class="col-md-9 col-lg-10 p-4">
+            <div class="col-md-9 col-lg-10 p-4 main-content">
                 <!-- 我的会话 -->
                 <div id="sessions" class="content-section active">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>我的会话</h2>
-                        <button class="btn btn-success" onclick="refreshSessions()">
-                            <i class="fas fa-sync-alt me-2"></i>刷新
-                        </button>
-                    </div>
-                    
-                    <!-- 当前选中的会话信息 -->
-                    <div id="currentSessionInfo" class="current-session-info" style="display: none;">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="mb-1">当前会话</h5>
-                                <p class="mb-0" id="currentSessionTitle">-</p>
-                            </div>
-                            <button class="btn btn-light btn-sm" onclick="leaveCurrentSession()">
-                                <i class="fas fa-sign-out-alt me-1"></i>离开会话
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div id="sessionsList">
-                        <div class="text-center">
-                            <div class="spinner-border text-success" role="status">
-                                <span class="visually-hidden">加载中...</span>
-                            </div>
-                            <p class="mt-2">正在加载会话列表...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 当前题目 -->
-                <div id="quiz" class="content-section">
-                    <div class="session-selector" id="quizSessionSelector">
-                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
-                    </div>
-                    
-                    <div id="quizSessionContent" style="display: none;">
                         <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h2>当前题目</h2>
-                            <div class="timer" id="timer">--:--</div>
-                        </div>
-                        
-                        <div id="quizContent">
-                            <div class="text-center waiting-animation">
-                                <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                                <h4>等待题目发布...</h4>
-                                <p class="text-muted">请耐心等待演讲者发布新题目</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 答题结果 -->
-                <div id="results" class="content-section">
-                    <div class="session-selector" id="resultsSessionSelector">
-                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
-                    </div>
-                    
-                    <div id="resultsSessionContent" style="display: none;">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h2>答题结果</h2>
-                            <button class="btn btn-success" onclick="refreshResults()">
+                            <h2>我的会话</h2>
+                            <button class="btn btn-success" onclick="refreshSessions()">
                                 <i class="fas fa-sync-alt me-2"></i>刷新
                             </button>
                         </div>
                         
-                        <div id="resultsContent">
+                        <!-- 当前选中的会话信息 -->
+                        <div id="currentSessionInfo" class="current-session-info" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1">当前会话</h5>
+                                    <p class="mb-0" id="currentSessionTitle">-</p>
+                                </div>
+                                <button class="btn btn-light btn-sm" onclick="leaveCurrentSession()">
+                                    <i class="fas fa-sign-out-alt me-1"></i>离开会话
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="sessionsList">
                             <div class="text-center">
-                                <p class="text-muted">暂无答题记录</p>
+                                <div class="spinner-border text-success" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <p class="mt-2">正在加载会话列表...</p>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <!-- 讨论区 -->
-                <div id="discussions" class="content-section">
-                    <div class="session-selector" id="discussionsSessionSelector">
-                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
-                    </div>
-                    
-                    <div id="discussionsSessionContent" style="display: none;">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h2>讨论区</h2>
-                            <button class="btn btn-success" onclick="refreshDiscussions()">
-                                <i class="fas fa-sync-alt me-2"></i>刷新
-                            </button>
+                
+                    <!-- 当前题目 -->
+                    <div id="quiz" class="content-section">
+                        <div class="session-selector" id="quizSessionSelector">
+                            <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
                         </div>
                         
-                        <div id="discussionsContent">
-                            <div class="text-center">
-                                <p class="text-muted">请先选择一个题目进行讨论</p>
+                        <div id="quizSessionContent" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h2>当前题目</h2>
+                                <div class="timer" id="timer">--:--</div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 反馈 -->
-                <div id="feedback" class="content-section">
-                    <div class="session-selector" id="feedbackSessionSelector">
-                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
-                    </div>
-                    
-                    <div id="feedbackSessionContent" style="display: none;">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h2>反馈</h2>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-8">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h5><i class="fas fa-comment-dots me-2"></i>向演讲者反馈</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="mb-3">
-                                            <label class="form-label">反馈类型</label>
-                                            <div class="btn-group-vertical d-grid gap-2">
-                                                <button class="btn btn-outline-warning feedback-btn" data-type="too_fast">
-                                                    <i class="fas fa-forward me-2"></i>讲得太快
-                                                </button>
-                                                <button class="btn btn-outline-info feedback-btn" data-type="too_slow">
-                                                    <i class="fas fa-backward me-2"></i>讲得太慢
-                                                </button>
-                                                <button class="btn btn-outline-secondary feedback-btn" data-type="boring">
-                                                    <i class="fas fa-bed me-2"></i>内容乏味
-                                                </button>
-                                                <button class="btn btn-outline-danger feedback-btn" data-type="bad_question">
-                                                    <i class="fas fa-question me-2"></i>题目质量不好
-                                                </button>
-                                                <button class="btn btn-outline-dark feedback-btn" data-type="environment">
-                                                    <i class="fas fa-volume-down me-2"></i>环境问题
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="mb-3">
-                                            <label for="feedbackContent" class="form-label">详细说明（可选）</label>
-                                            <textarea class="form-control" id="feedbackContent" rows="3" placeholder="请详细描述您的反馈..."></textarea>
-                                        </div>
-                                        
-                                        <button class="btn btn-success" onclick="submitFeedback()">
-                                            <i class="fas fa-paper-plane me-2"></i>提交反馈
-                                        </button>
-                                    </div>
+                            
+                            <div id="quizContent">
+                                <div class="text-center waiting-animation">
+                                    <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+                                    <h4>等待题目发布...</h4>
+                                    <p class="text-muted">请耐心等待演讲者发布新题目</p>
                                 </div>
                             </div>
                             
-                            <div class="col-md-4">
+                            <!-- 答题完成后的功能访问区域 -->
+                            <div id="postQuizActions" class="mt-4" style="display: none;">
                                 <div class="card">
                                     <div class="card-header">
-                                        <h6><i class="fas fa-info-circle me-2"></i>反馈说明</h6>
+                                        <h5><i class="fas fa-check-circle me-2"></i>答题完成后可用功能</h5>
                                     </div>
                                     <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <button class="btn btn-primary w-100" onclick="showSection('results')">
+                                                    <i class="fas fa-chart-line me-2"></i>查看答题结果
+                                                </button>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <button class="btn btn-info w-100" onclick="showSection('discussions')">
+                                                    <i class="fas fa-comments me-2"></i>参与讨论
+                                                </button>
+                                            </div>
+                                        </div>
                                         <small class="text-muted">
-                                            您的反馈将帮助演讲者改进演讲质量。所有反馈都是匿名的，演讲者只能看到反馈类型和统计数据。
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            这些功能只有在您完成答题后才能使用
                                         </small>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <!-- 成绩统计 -->
-                <div id="statistics" class="content-section">
-                    <div class="session-selector" id="statisticsSessionSelector">
-                        <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
-                    </div>
-                    
-                    <div id="statisticsSessionContent" style="display: none;">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h2>成绩统计</h2>
-                            <button class="btn btn-success" onclick="refreshStatistics()">
-                                <i class="fas fa-sync-alt me-2"></i>刷新
-                            </button>
+                
+                    <!-- 答题结果 -->
+                    <div id="results" class="content-section">
+                        <div class="session-selector" id="resultsSessionSelector">
+                            <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
                         </div>
                         
-                        <div id="statisticsContent">
-                            <div class="text-center">
-                                <p class="text-muted">请先加入会话查看统计数据</p>
+                        <div id="resultsSessionContent" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h2>答题结果</h2>
+                                <button class="btn btn-success" onclick="refreshResults()">
+                                    <i class="fas fa-sync-alt me-2"></i>刷新
+                                </button>
+                            </div>
+                            
+                            <div id="resultsContent">
+                                <div class="text-center">
+                                    <p class="text-muted">暂无答题记录</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <!-- 讨论区 -->
+                    <div id="discussions" class="content-section">
+                        <div class="session-selector" id="discussionsSessionSelector">
+                            <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
+                        </div>
+                        
+                        <div id="discussionsSessionContent" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h2>讨论区</h2>
+                                <button class="btn btn-success" onclick="refreshDiscussions()">
+                                    <i class="fas fa-sync-alt me-2"></i>刷新
+                                </button>
+                            </div>
+                            
+                            <div id="discussionsContent">
+                                <div class="text-center">
+                                    <p class="text-muted">请先选择一个题目进行讨论</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <!-- 反馈 -->
+                    <div id="feedback" class="content-section">
+                        <div class="session-selector" id="feedbackSessionSelector">
+                            <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
+                        </div>
+                        
+                        <div id="feedbackSessionContent" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h2><i class="fas fa-comment-dots me-3"></i>实时反馈</h2>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-lg-8">
+                                    <div class="feedback-section">
+                                        <div class="feedback-header">
+                                            <h5 class="mb-0">
+                                                <i class="fas fa-paper-plane me-2"></i>
+                                                向演讲者发送反馈
+                                            </h5>
+                                            <small class="opacity-75">帮助演讲者实时调整演讲节奏和内容</small>
+                                        </div>
+                                        <div class="feedback-body">
+                                            <div class="mb-4">
+                                                <label class="form-label fw-bold mb-3">选择反馈类型</label>
+                                                <div class="feedback-type-grid">
+                                                    <div class="feedback-type-card" data-type="too_fast" onclick="selectFeedbackType(this)">
+                                                        <i class="fas fa-forward icon"></i>
+                                                        <div class="title">节奏太快</div>
+                                                        <div class="description">请放慢讲解速度</div>
+                                                    </div>
+                                                    <div class="feedback-type-card" data-type="too_slow" onclick="selectFeedbackType(this)">
+                                                        <i class="fas fa-backward icon"></i>
+                                                        <div class="title">节奏太慢</div>
+                                                        <div class="description">可以加快一些节奏</div>
+                                                    </div>
+                                                    <div class="feedback-type-card" data-type="boring" onclick="selectFeedbackType(this)">
+                                                        <i class="fas fa-bed icon"></i>
+                                                        <div class="title">内容乏味</div>
+                                                        <div class="description">需要更有趣的内容</div>
+                                                    </div>
+                                                    <div class="feedback-type-card" data-type="bad_question" onclick="selectFeedbackType(this)">
+                                                        <i class="fas fa-question icon"></i>
+                                                        <div class="title">题目质量</div>
+                                                        <div class="description">题目设计有问题</div>
+                                                    </div>
+                                                    <div class="feedback-type-card" data-type="environment" onclick="selectFeedbackType(this)">
+                                                        <i class="fas fa-volume-down icon"></i>
+                                                        <div class="title">环境问题</div>
+                                                        <div class="description">音响或环境干扰</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mb-4">
+                                                <label for="feedbackContent" class="form-label fw-bold">详细说明（可选）</label>
+                                                <textarea class="form-control feedback-textarea" id="feedbackContent" placeholder="请详细描述您的反馈，帮助演讲者更好地改进..."></textarea>
+                                            </div>
+                                            
+                                            <div class="text-center">
+                                                <button class="feedback-submit-btn" onclick="submitFeedback()">
+                                                    <i class="fas fa-paper-plane me-2"></i>发送反馈
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-lg-4">
+                                    <div class="feedback-info-card">
+                                        <div class="feedback-info-header">
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-info-circle me-2"></i>反馈说明
+                                            </h6>
+                                        </div>
+                                        <div class="feedback-info-body">
+                                            <div class="mb-3">
+                                                <h6 class="text-primary">
+                                                    <i class="fas fa-shield-alt me-2"></i>匿名保护
+                                                </h6>
+                                                <p class="small text-muted mb-0">
+                                                    您的反馈完全匿名，演讲者只能看到反馈类型和统计数据，无法识别具体是谁发送的。
+                                                </p>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <h6 class="text-success">
+                                                    <i class="fas fa-clock me-2"></i>实时传达
+                                                </h6>
+                                                <p class="small text-muted mb-0">
+                                                    反馈会立即传达给演讲者，帮助他们实时调整演讲节奏和内容。
+                                                </p>
+                                            </div>
+                                            
+                                            <div class="feedback-stats">
+                                                <div class="feedback-stat-item">
+                                                    <div class="feedback-stat-number">12</div>
+                                                    <div class="feedback-stat-label">今日反馈</div>
+                                                </div>
+                                                <div class="feedback-stat-item">
+                                                    <div class="feedback-stat-number">85%</div>
+                                                    <div class="feedback-stat-label">满意度</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <!-- 成绩统计 -->
+                    <div id="statistics" class="content-section">
+                        <div class="session-selector" id="statisticsSessionSelector">
+                            <h6><i class="fas fa-info-circle me-2"></i>请先在"我的会话"中选择一个会话</h6>
+                        </div>
+                        
+                        <div id="statisticsSessionContent" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h2><i class="fas fa-chart-bar me-3"></i>成绩统计</h2>
+                                <button class="refresh-btn" onclick="refreshStatistics()">
+                                    <i class="fas fa-sync-alt me-2"></i>刷新数据
+                                </button>
+                            </div>
+                            
+                            <div id="statisticsContent">
+                                <!-- 统计概览 -->
+                                <div class="statistics-section">
+                                    <div class="statistics-header">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-trophy me-2"></i>
+                                            我的答题表现
+                                        </h5>
+                                        <small class="opacity-75">实时更新的个人成绩统计</small>
+                                    </div>
+                                    <div class="statistics-body">
+                                        <div class="stats-overview">
+                                            <div class="stats-card accuracy-excellent">
+                                                <i class="fas fa-bullseye stats-icon"></i>
+                                                <div class="stats-number" id="accuracyRate">--</div>
+                                                <div class="stats-label">正确率</div>
+                                            </div>
+                                            <div class="stats-card">
+                                                <i class="fas fa-question-circle stats-icon"></i>
+                                                <div class="stats-number" id="totalQuestions">--</div>
+                                                <div class="stats-label">总题数</div>
+                                            </div>
+                                            <div class="stats-card">
+                                                <i class="fas fa-check-circle stats-icon"></i>
+                                                <div class="stats-number" id="correctAnswers">--</div>
+                                                <div class="stats-label">答对题数</div>
+                                            </div>
+                                            <div class="stats-card">
+                                                <i class="fas fa-clock stats-icon"></i>
+                                                <div class="stats-number" id="avgTime">--</div>
+                                                <div class="stats-label">平均用时</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="stats-chart-container">
+                                                    <h6 class="text-center mb-3">
+                                                        <i class="fas fa-chart-pie me-2"></i>正确率分析
+                                                    </h6>
+                                                    <div class="progress-ring">
+                                                        <svg>
+                                                            <circle class="bg" cx="60" cy="60" r="52"></circle>
+                                                            <circle class="progress excellent" cx="60" cy="60" r="52" 
+                                                                    stroke-dasharray="327" stroke-dashoffset="327" id="progressCircle"></circle>
+                                                        </svg>
+                                                        <div class="progress-text" id="progressText">--%</div>
+                                                    </div>
+                                                    <div class="text-center">
+                                                        <span class="badge bg-secondary" id="performanceBadge">暂无数据</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="stats-chart-container">
+                                                    <h6 class="text-center mb-3">
+                                                        <i class="fas fa-medal me-2"></i>成绩等级
+                                                    </h6>
+                                                    <div class="text-center">
+                                                        <div class="mb-3">
+                                                            <i class="fas fa-question" style="font-size: 3rem; color: #6c757d;" id="gradeIcon"></i>
+                                                        </div>
+                                                        <h4 class="text-muted mb-2" id="gradeLevel">暂无等级</h4>
+                                                        <p class="text-muted mb-0" id="gradeMessage">完成答题后查看等级</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 答题历史 -->
+                                <div class="quiz-history">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-history me-2"></i>答题历史
+                                        </h5>
+                                        <span class="badge bg-primary ms-2">最近记录</span>
+                                    </div>
+                                    
+                                    <div id="quizHistoryList">
+                                        <div class="text-center text-muted py-4">
+                                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                                            <p>暂无答题记录</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 排行榜 -->
+                                <div class="ranking-section">
+                                    <div class="ranking-header">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-trophy me-2"></i>会话排行榜
+                                        </h5>
+                                        <span class="badge bg-info ms-2">实时更新</span>
+                                    </div>
+                                    
+                                    <div id="rankingList">
+                                        <div class="text-center text-muted py-4">
+                                            <i class="fas fa-users fa-3x mb-3"></i>
+                                            <p>暂无排行数据</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
