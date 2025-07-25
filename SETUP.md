@@ -1,4 +1,4 @@
-# PQ-Project 配置说明
+# PopQuiz 配置说明
 
 ## 环境变量配置
 

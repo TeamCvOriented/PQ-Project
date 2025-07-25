@@ -263,15 +263,32 @@ class FileProcessor:
             pdf_file = io.BytesIO(pdf_bytes)
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             
+            print(f"PDF文件包含 {len(pdf_reader.pages)} 页")
+            
             for page_num in range(len(pdf_reader.pages)):
-                page = pdf_reader.pages[page_num]
-                text = page.extract_text()
-                if text.strip():
-                    text_content.append(text)
+                try:
+                    page = pdf_reader.pages[page_num]
+                    text = page.extract_text()
+                    if text.strip():
+                        text_content.append(text)
+                        print(f"第{page_num+1}页提取到 {len(text)} 字符")
+                    else:
+                        print(f"第{page_num+1}页未能提取到文本")
+                except Exception as e:
+                    print(f"处理第{page_num+1}页时出错: {e}")
+                    continue
+                    
         except Exception as e:
             print(f"从PDF字节流读取文本时出错: {str(e)}")
+            return f"PDF文件处理失败: {str(e)}"
         
-        return '\n'.join(text_content)
+        result = '\n'.join(text_content)
+        print(f"PDF处理完成，总共提取 {len(result)} 字符")
+        
+        if not result.strip():
+            return "PDF文件中未能提取到文本内容，可能是扫描版PDF或图片格式"
+        
+        return result
 
     def extract_text_from_ppt_bytes(self, ppt_bytes):
         """从PowerPoint字节流提取文本内容"""
@@ -282,12 +299,15 @@ class FileProcessor:
             
             # 检查文件是否为有效的PowerPoint文件
             if len(ppt_bytes) < 100:
-                raise ValueError("文件太小，可能不是有效的PPT文件")
+                return "文件太小，可能不是有效的PPT文件"
             
             # 检查文件头以确定文件类型
             ppt_file.seek(0)
             header = ppt_file.read(8)
             ppt_file.seek(0)
+            
+            print(f"PPT文件大小: {len(ppt_bytes)} 字节")
+            print(f"文件头: {header.hex()}")
             
             # .pptx 文件是ZIP格式，应该以 'PK' 开头
             # .ppt 文件是OLE格式，有不同的头部
@@ -295,12 +315,23 @@ class FileProcessor:
                 # 这是 .pptx 文件 (ZIP格式)
                 try:
                     presentation = Presentation(ppt_file)
+                    slide_count = len(presentation.slides)
+                    print(f"PPTX文件包含 {slide_count} 张幻灯片")
                     
-                    for slide in presentation.slides:
+                    for slide_num, slide in enumerate(presentation.slides):
+                        slide_text = []
                         # 提取文本框内容
                         for shape in slide.shapes:
                             if hasattr(shape, "text") and shape.text.strip():
-                                text_content.append(shape.text)
+                                slide_text.append(shape.text.strip())
+                        
+                        if slide_text:
+                            slide_content = '\n'.join(slide_text)
+                            text_content.append(slide_content)
+                            print(f"第{slide_num+1}张幻灯片提取到 {len(slide_content)} 字符")
+                        else:
+                            print(f"第{slide_num+1}张幻灯片未找到文本内容")
+                            
                 except Exception as e:
                     print(f"处理PPTX文件时出错: {str(e)}")
                     # 如果python-pptx处理失败，尝试其他方法
@@ -308,8 +339,8 @@ class FileProcessor:
             
             elif header[:8] == b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1':
                 # 这是老版本的 .ppt 文件 (OLE格式)
-                print("检测到旧版本PPT文件(.ppt)，当前版本暂不支持，请转换为.pptx格式")
-                return "不支持旧版本PPT文件，请将文件另存为.pptx格式后重新上传"
+                print("检测到旧版本PPT文件(.ppt)")
+                return "不支持旧版本PPT文件，请将文件转换为.pptx格式后重新上传"
             
             else:
                 # 未知文件格式
@@ -318,12 +349,15 @@ class FileProcessor:
                 
         except Exception as e:
             print(f"从PPT字节流读取文本时出错: {str(e)}")
-            return f"处理PPT文件时出错: {str(e)}"
+            return f"PPT文件处理失败: {str(e)}"
         
-        if not text_content:
-            return "未能从PPT文件中提取到文本内容，请检查文件是否包含文本"
+        result = '\n'.join(text_content)
+        print(f"PPT处理完成，总共提取 {len(result)} 字符")
         
-        return '\n'.join(text_content)
+        if not result.strip():
+            return "PPT文件中未能提取到文本内容，请检查文件是否包含文本"
+        
+        return result
     
     def _extract_text_from_ppt_alternative(self, ppt_bytes):
         """PPT文件处理的备用方法"""

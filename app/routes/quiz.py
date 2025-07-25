@@ -973,6 +973,7 @@ def generate_ai_quizzes():
         return jsonify({'error': '系统错误，请重试'}), 500
 
 @quiz_bp.route('/upload-multiple', methods=['POST'])
+@require_auth
 def upload_multiple_files_and_generate_quiz():
     """上传多个文件并生成题目"""
     try:
@@ -1010,6 +1011,8 @@ def upload_multiple_files_and_generate_quiz():
             
             file_processor = FileProcessor()
             
+            print(f"📁 开始处理 {len(files)} 个文件...")
+            
             for file in files:
                 if not file or file.filename == '':
                     continue
@@ -1023,8 +1026,16 @@ def upload_multiple_files_and_generate_quiz():
                     continue
                 
                 try:
+                    print(f"🔄 处理文件: {file.filename}")
+                    
                     # 读取文件内容
                     file_content = file.read()
+                    print(f"   文件大小: {len(file_content)} 字节")
+                    
+                    if len(file_content) == 0:
+                        failed_files.append(f"{file.filename} (文件为空)")
+                        continue
+                    
                     file.seek(0)  # 重置文件指针
                     
                     # 提取文本内容
@@ -1033,29 +1044,49 @@ def upload_multiple_files_and_generate_quiz():
                     else:  # PPT files
                         text_content = file_processor.extract_text_from_ppt_bytes(file_content)
                     
-                    if text_content and len(text_content.strip()) > 20:
-                        all_file_contents.append({
-                            'filename': file.filename,
-                            'content': text_content,
-                            'length': len(text_content)
-                        })
-                        processed_files.append(file.filename)
-                    else:
+                    print(f"   提取文本长度: {len(text_content) if text_content else 0}")
+                    
+                    # 检查文本内容
+                    if not text_content:
                         failed_files.append(f"{file.filename} (无法提取文本)")
+                        continue
+                    
+                    if isinstance(text_content, str) and (
+                        text_content.startswith('不支持') or 
+                        text_content.startswith('文件格式不正确') or
+                        text_content.startswith('处理') and '失败' in text_content
+                    ):
+                        failed_files.append(f"{file.filename} ({text_content[:50]})")
+                        continue
+                    
+                    if len(text_content.strip()) < 20:
+                        failed_files.append(f"{file.filename} (文本内容太少: {len(text_content)}字符)")
+                        continue
+                    
+                    all_file_contents.append({
+                        'filename': file.filename,
+                        'content': text_content,
+                        'length': len(text_content)
+                    })
+                    processed_files.append(file.filename)
+                    print(f"   ✅ 文件处理成功")
                         
                 except Exception as e:
+                    print(f"   ❌ 文件处理失败: {e}")
                     failed_files.append(f"{file.filename} (处理失败: {str(e)})")
                     continue
             
+            print(f"📊 处理结果: 成功 {len(processed_files)} 个，失败 {len(failed_files)} 个")
+            
             if not all_file_contents:
-                return jsonify({'success': False, 'message': '没有成功处理的文件，无法生成题目'}), 400
+                return jsonify({'success': False, 'message': '没有成功处理的文件，无法生成题目。请检查文件格式和内容。'}), 400
             
             # 计算每个文件应该生成的题目数量
             total_files = len(all_file_contents)
             questions_per_file = max(1, num_questions // total_files)  # 每个文件至少1题
             remaining_questions = num_questions - (questions_per_file * total_files)
             
-            print(f"成功处理{total_files}个文件，每个文件生成{questions_per_file}道题目，剩余{remaining_questions}道题目")
+            print(f"📋 题目分配: 每文件{questions_per_file}题，剩余{remaining_questions}题")
             
             # 为每个文件分别生成题目
             quiz_generator = QuizGenerator()
@@ -1067,24 +1098,31 @@ def upload_multiple_files_and_generate_quiz():
                 if i < remaining_questions:  # 剩余题目分配给前几个文件
                     current_questions += 1
                 
-                print(f"🔄 为文件 '{file_info['filename']}' 生成 {current_questions} 道题目...")
+                print(f"🤖 为文件 '{file_info['filename']}' 生成 {current_questions} 道题目...")
                 
-                # 为当前文件生成题目
-                file_quizzes = quiz_generator.generate_quiz(file_info['content'], num_questions=current_questions)
-                
-                if file_quizzes:
-                    # 给每道题添加来源文件信息
-                    for quiz in file_quizzes:
-                        quiz['source_file'] = file_info['filename']
-                        if 'explanation' in quiz:
-                            quiz['explanation'] += f" (来源：{file_info['filename']})"
-                        else:
-                            quiz['explanation'] = f"来源：{file_info['filename']}"
+                try:
+                    # 为当前文件生成题目
+                    file_quizzes = quiz_generator.generate_quiz(file_info['content'], num_questions=current_questions)
                     
-                    all_generated_quizzes.extend(file_quizzes)
-                    print(f"✅ 文件 '{file_info['filename']}' 成功生成 {len(file_quizzes)} 道题目")
-                else:
-                    print(f"❌ 文件 '{file_info['filename']}' 生成题目失败")
+                    if file_quizzes:
+                        # 给每道题添加来源文件信息
+                        for quiz in file_quizzes:
+                            quiz['source_file'] = file_info['filename']
+                            if 'explanation' in quiz:
+                                quiz['explanation'] += f" (来源：{file_info['filename']})"
+                            else:
+                                quiz['explanation'] = f"来源：{file_info['filename']}"
+                        
+                        all_generated_quizzes.extend(file_quizzes)
+                        print(f"   ✅ 成功生成 {len(file_quizzes)} 道题目")
+                    else:
+                        print(f"   ❌ 题目生成失败")
+                        failed_files.append(f"{file_info['filename']} (AI生成失败)")
+                        
+                except Exception as e:
+                    print(f"   ❌ 题目生成错误: {e}")
+                    failed_files.append(f"{file_info['filename']} (AI生成错误: {str(e)})")
+                    continue
             
             if not all_generated_quizzes:
                 return jsonify({'success': False, 'message': 'AI生成题目失败，请检查文件内容或稍后重试'}), 500
@@ -1096,6 +1134,8 @@ def upload_multiple_files_and_generate_quiz():
             
             # 统计信息
             total_content_length = sum(file_info['length'] for file_info in all_file_contents)
+            
+            print(f"🎉 最终结果: 生成了 {len(all_generated_quizzes)} 道题目")
             
             return jsonify({
                 'success': True,
@@ -1117,15 +1157,16 @@ def upload_multiple_files_and_generate_quiz():
             })
             
         except ImportError as e:
+            print(f"❌ 导入错误: {e}")
             return jsonify({'success': False, 'message': '文件处理功能未正确配置'}), 500
         except Exception as e:
-            print(f"多文件AI生成题目错误: {e}")
+            print(f"❌ 处理错误: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'message': f'处理失败: {str(e)}'}), 500
             
     except Exception as e:
-        print(f"多文件上传API错误: {e}")
+        print(f"❌ API错误: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'message': '系统错误，请重试'}), 500

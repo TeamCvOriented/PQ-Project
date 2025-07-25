@@ -19,42 +19,42 @@ def init_database():
             users = [
                 {
                     'username': 'admin',
-                    'email': 'admin@pq-project.com',
+                    'email': 'admin@popquiz.com',
                     'password': 'admin123',
                     'role': UserRole.ORGANIZER,
                     'nickname': '系统管理员'
                 },
                 {
                     'username': 'speaker1',
-                    'email': 'speaker1@pq-project.com',
+                    'email': 'speaker1@popquiz.com',
                     'password': 'speaker123',
                     'role': UserRole.SPEAKER,
                     'nickname': '张教授'
                 },
                 {
                     'username': 'speaker2',
-                    'email': 'speaker2@pq-project.com',
+                    'email': 'speaker2@popquiz.com',
                     'password': 'speaker123',
                     'role': UserRole.SPEAKER,
                     'nickname': '李博士'
                 },
                 {
                     'username': 'listener1',
-                    'email': 'listener1@pq-project.com',
+                    'email': 'listener1@popquiz.com',
                     'password': 'listener123',
                     'role': UserRole.LISTENER,
                     'nickname': '小明'
                 },
                 {
                     'username': 'listener2',
-                    'email': 'listener2@pq-project.com',
+                    'email': 'listener2@popquiz.com',
                     'password': 'listener123',
                     'role': UserRole.LISTENER,
                     'nickname': '小红'
                 },
                 {
                     'username': 'listener3',
-                    'email': 'listener3@pq-project.com',
+                    'email': 'listener3@popquiz.com',
                     'password': 'listener123',
                     'role': UserRole.LISTENER,
                     'nickname': '小李'
