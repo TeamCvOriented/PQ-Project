@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session, current_app
 from app import db
-from app.models import Quiz, QuizResponse, QuizDiscussion, Content, Session as PQSession, Feedback, UserQuizProgress, User
+from app.models import Quiz, QuizResponse, QuizDiscussion, Content, Session as PQSession, Feedback, UserQuizProgress, User, SessionParticipant
 from app.routes.auth import require_auth
 from datetime import datetime
 import random
@@ -1610,42 +1610,67 @@ def get_discussions(quiz_id):
     if not quiz:
         return jsonify({'error': '题目不存在'}), 404
     
-    discussions = QuizDiscussion.query.filter_by(quiz_id=quiz_id).order_by(QuizDiscussion.created_at.asc()).all()
-    discussion_list = [{
-        'id': d.id,
-        'user_id': d.user_id,
-        'username': User.query.get(d.user_id).username if User.query.get(d.user_id) else '未知用户',
-        'message': d.message,
-        'created_at': d.created_at.isoformat()
-    } for d in discussions]
-    
-    # 获取统计数据
-    responses = QuizResponse.query.filter_by(quiz_id=quiz_id).all()
-    total = len(responses)
-    option_stats = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
-    for r in responses:
-        option_stats[r.answer] += 1
-    
-    return jsonify({
-        'success': True,
-        'quiz': {
-            'id': quiz.id,
-            'question': quiz.question,
-            'option_a': quiz.option_a,
-            'option_b': quiz.option_b,
-            'option_c': quiz.option_c,
-            'option_d': quiz.option_d,
-            'correct_answer': quiz.correct_answer,
-            'explanation': quiz.explanation,
-            'is_active': quiz.is_active
-        },
-        'discussions': discussion_list,
-        'can_discuss': True,  # 所有题目都可以讨论
-        'statistics': {
-            'total_responses': total,
-            'option_distribution': option_stats
-        }
-    })
+    try:
+        discussions = QuizDiscussion.query.filter_by(quiz_id=quiz_id).order_by(QuizDiscussion.created_at.asc()).all()
+        
+        # 优化用户查询：一次性获取所有相关用户
+        user_ids = [d.user_id for d in discussions]
+        users = {user.id: user for user in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        
+        discussion_list = [{
+            'id': d.id,
+            'user_id': d.user_id,
+            'username': users.get(d.user_id).username if users.get(d.user_id) else '未知用户',
+            'message': d.message,
+            'created_at': d.created_at.isoformat()
+        } for d in discussions]
+        
+        # 获取统计数据
+        responses = QuizResponse.query.filter_by(quiz_id=quiz_id).all()
+        total = len(responses)
+        
+        # 分离实际答题和未答题
+        actual_responses = [r for r in responses if r.answer in ['A', 'B', 'C', 'D']]
+        unanswered_responses = [r for r in responses if r.answer == 'X']
+        
+        # 统计选项分布（只统计实际答题）
+        option_stats = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
+        for r in actual_responses:
+            option_stats[r.answer] += 1
+        
+        # 计算百分比
+        actual_total = len(actual_responses)
+        option_percentages = {}
+        for option, count in option_stats.items():
+            percentage = (count / actual_total * 100) if actual_total > 0 else 0
+            option_percentages[option] = round(percentage, 1)
+        
+        return jsonify({
+            'success': True,
+            'quiz': {
+                'id': quiz.id,
+                'question': quiz.question,
+                'option_a': quiz.option_a,
+                'option_b': quiz.option_b,
+                'option_c': quiz.option_c,
+                'option_d': quiz.option_d,
+                'correct_answer': quiz.correct_answer,
+                'explanation': quiz.explanation,
+                'is_active': quiz.is_active
+            },
+            'discussions': discussion_list,
+            'can_discuss': True,  # 所有题目都可以讨论
+            'statistics': {
+                'total_responses': total,
+                'actual_responses': actual_total,  # 实际答题数
+                'unanswered_count': len(unanswered_responses),  # 未答题数
+                'option_distribution': option_stats,
+                'option_percentages': option_percentages
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"获取讨论失败: {str(e)}")
+        return jsonify({'error': '获取讨论失败，请稍后重试'}), 500
 
 @quiz_bp.route('/<int:quiz_id>/discussions', methods=['POST'])
 @require_auth
@@ -1718,6 +1743,131 @@ def get_session_discussions(session_id):
 def get_finished_quizzes():
     quizzes = Quiz.query.filter_by(is_active=False).all()  # 简化，实际应过滤用户参与的会话
     return jsonify({'quizzes': [{'id': q.id, 'question': q.question} for q in quizzes]})
+
+@quiz_bp.route('/session-overview/<int:session_id>', methods=['GET'])
+@require_auth
+def get_session_overview_statistics(session_id):
+    """获取会话级别的统计概览（专为组织者设计）"""
+    try:
+        # 验证会话存在
+        pq_session = PQSession.query.get(session_id)
+        if not pq_session:
+            return jsonify({'error': '会话不存在'}), 404
+        
+        # 验证权限（组织者或演讲者）
+        user_id = session['user_id']
+        if pq_session.organizer_id != user_id and pq_session.speaker_id != user_id:
+            return jsonify({'error': '权限不足'}), 403
+        
+        # 获取会话参与者总数
+        total_participants = SessionParticipant.query.filter_by(session_id=session_id).count()
+        
+        # 获取会话中的所有题目
+        total_quizzes = Quiz.query.filter_by(session_id=session_id).count()
+        
+        # 获取所有答题记录
+        all_responses = db.session.query(QuizResponse).join(Quiz).filter(
+            Quiz.session_id == session_id
+        ).all()
+        
+        # 分离实际答题记录和未答题记录
+        actual_responses = [r for r in all_responses if r.answer != 'X']  # 实际答题
+        unanswered_responses = [r for r in all_responses if r.answer == 'X']  # 未答题
+        
+        # 统计实际参与答题的用户数（去重）
+        participated_users = set(r.user_id for r in actual_responses)
+        participated_count = len(participated_users)
+        
+        # 统计正确答案数
+        correct_answers = sum(1 for r in actual_responses if r.is_correct)
+        
+        # 计算整体正确率（基于实际答题）
+        total_actual_answers = len(actual_responses)
+        overall_accuracy = (correct_answers / total_actual_answers * 100) if total_actual_answers > 0 else 0
+        
+        # 计算参与率（实际答题用户数 / 总参与者数）
+        participation_rate = (participated_count / total_participants * 100) if total_participants > 0 else 0
+        
+        # 计算未参与答题的用户数
+        not_participated_count = max(0, total_participants - participated_count)
+        
+        # 按题目统计参与情况
+        quiz_participation = []
+        quizzes = Quiz.query.filter_by(session_id=session_id).order_by(Quiz.created_at.asc()).all()
+        
+        for i, quiz in enumerate(quizzes):
+            quiz_responses = QuizResponse.query.filter_by(quiz_id=quiz.id).all()
+            quiz_actual_responses = [r for r in quiz_responses if r.answer != 'X']
+            quiz_correct_responses = sum(1 for r in quiz_actual_responses if r.is_correct)
+            
+            quiz_total_responses = len(quiz_responses)  # 包含所有记录
+            quiz_actual_count = len(quiz_actual_responses)  # 实际答题数
+            
+            quiz_participation.append({
+                'quiz_number': i + 1,
+                'quiz_id': quiz.id,
+                'total_responses': quiz_total_responses,
+                'actual_responses': quiz_actual_count,  # 实际回答数（排除未答题）
+                'correct_responses': quiz_correct_responses,
+                'accuracy_rate': round((quiz_correct_responses / quiz_actual_count * 100), 1) if quiz_actual_count > 0 else 0,
+                'participation_rate': round((quiz_actual_count / total_participants * 100), 1) if total_participants > 0 else 0,
+                'is_active': quiz.is_active,
+                'created_at': quiz.created_at.isoformat() if quiz.created_at else ''
+            })
+        
+        # 获取最活跃的参与者（答题最多的用户）
+        user_answer_counts = {}
+        for response in actual_responses:  # 只统计实际答题
+            user_answer_counts[response.user_id] = user_answer_counts.get(response.user_id, 0) + 1
+        
+        # 排序获取前5名最活跃用户
+        top_participants = sorted(user_answer_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_participant_info = []
+        
+        for user_id, answer_count in top_participants:
+            user = User.query.get(user_id)
+            if user:
+                user_correct = sum(1 for r in actual_responses if r.user_id == user_id and r.is_correct)
+                user_accuracy = (user_correct / answer_count * 100) if answer_count > 0 else 0
+                
+                top_participant_info.append({
+                    'user_id': user_id,
+                    'username': user.username,
+                    'nickname': user.nickname if hasattr(user, 'nickname') else None,
+                    'total_answers': answer_count,
+                    'correct_answers': user_correct,
+                    'accuracy': round(user_accuracy, 1)
+                })
+        
+        return jsonify({
+            'session_info': {
+                'id': pq_session.id,
+                'title': pq_session.title,
+                'is_active': pq_session.is_active,
+                'created_at': pq_session.created_at.isoformat()
+            },
+            'overall_statistics': {
+                'total_participants': total_participants,
+                'participated_users': participated_count,
+                'not_participated_users': not_participated_count,
+                'participation_rate': round(participation_rate, 1),
+                'total_quizzes': total_quizzes,
+                'total_answers': total_actual_answers,
+                'correct_answers': correct_answers,
+                'overall_accuracy': round(overall_accuracy, 1)
+            },
+            'quiz_participation': quiz_participation,
+            'top_participants': top_participant_info
+        })
+        
+    except Exception as e:
+        print(f"获取会话统计概览时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': '获取统计信息失败，请稍后重试',
+            'details': str(e) if current_app.debug else None
+        }), 500
 
 @quiz_bp.route('/create', methods=['POST'])
 @require_auth

@@ -751,217 +751,415 @@ async function loadSelectedSessionStats() {
         return;
     }
     
+    // 显示刷新按钮
+    const refreshBtn = document.getElementById('refreshStatsBtn');
+    if (refreshBtn) {
+        refreshBtn.style.display = 'inline-block';
+        refreshBtn.setAttribute('data-session-id', sessionId);
+    }
+
     await loadSessionStatistics(sessionId);
 }
 
-// 加载会话统计数据
+// 刷新当前会话统计数据
+function refreshCurrentSessionStats() {
+    const refreshBtn = document.getElementById('refreshStatsBtn');
+    const sessionId = refreshBtn ? refreshBtn.getAttribute('data-session-id') : null;
+    
+    if (sessionId) {
+        loadSessionStatistics(sessionId);
+    } else {
+        showMessage('请先选择一个会话', 'warning');
+    }
+}
+
+// 加载会话统计数据 - 修改为使用新的API
 async function loadSessionStatistics(sessionId) {
-    if (!sessionId) {
-        document.getElementById('analyticsContent').innerHTML = '<div class="text-center text-muted py-5">请选择一个会话查看统计数据</div>';
+    const container = document.getElementById('analyticsContent') || document.getElementById('statisticsContent');
+    
+    if (!container) {
+        console.error('找不到统计容器元素');
         return;
     }
 
     // 显示加载状态
-    document.getElementById('analyticsContent').innerHTML = `
+    container.innerHTML = `
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">加载中...</span>
             </div>
-            <p class="mt-3">正在加载统计数据...</p>
+            <p class="mt-3 text-muted">正在加载会话统计数据...</p>
         </div>
     `;
 
     try {
-        console.log('正在加载会话统计，会话ID:', sessionId);
-        const response = await fetch(`/api/quiz/statistics/${sessionId}`);
-        console.log('API响应状态:', response.status);
-        console.log('响应头:', response.headers);
+        console.log(`正在加载会话 ${sessionId} 的统计数据...`);
+        const response = await fetch(`/api/quiz/session-overview/${sessionId}`);
         
         if (response.ok) {
             const data = await response.json();
-            console.log('接收到的统计数据:', data);
-            displayStatistics(data);
+            console.log('统计数据加载成功:', data);
+            displaySessionOverview(data);
         } else {
-            console.error('API请求失败，状态码:', response.status);
+            console.error('API响应错误:', response.status, response.statusText);
+            
+            // 尝试解析错误响应
+            let errorMessage = '加载统计数据失败';
             try {
                 const errorData = await response.json();
-                console.error('API错误响应:', errorData);
-                showMessage(errorData.error || '加载统计数据失败', 'error');
+                errorMessage = errorData.error || errorMessage;
+                console.error('错误详情:', errorData);
             } catch (parseError) {
                 console.error('解析错误响应失败:', parseError);
-                showMessage(`服务器响应错误 (${response.status})`, 'error');
+                
+                if (response.status === 500) {
+                    errorMessage = '服务器内部错误，请稍后重试';
+                } else if (response.status === 404) {
+                    errorMessage = '会话不存在或已被删除';
+                } else if (response.status === 403) {
+                    errorMessage = '没有权限访问该会话的统计数据';
+                }
             }
             
-            // 显示错误状态
-            document.getElementById('analyticsContent').innerHTML = `
-                <div class="text-center text-muted py-5">
-                    <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
-                    <h5>加载失败</h5>
-                    <p>无法加载统计数据，请稍后重试</p>
+            showMessage(errorMessage, 'error');
+            
+            // 显示错误信息到统计容器
+            if (container) {
+                container.innerHTML = `
+                    <div class="text-center text-danger py-5">
+                        <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                        <h5>加载统计数据失败</h5>
+                        <p>${errorMessage}</p>
+                        <button class="btn btn-primary" onclick="loadSessionStatistics(${sessionId})">
+                            <i class="fas fa-redo me-2"></i>重试
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('网络请求失败:', error);
+        showMessage('网络错误，请检查网络连接后重试', 'error');
+        
+        // 显示网络错误信息
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center text-danger py-5">
+                    <i class="fas fa-wifi fa-3x mb-3"></i>
+                    <h5>网络连接错误</h5>
+                    <p>请检查网络连接后重试</p>
+                    <button class="btn btn-primary" onclick="loadSessionStatistics(${sessionId})">
+                        <i class="fas fa-redo me-2"></i>重试
+                    </button>
                 </div>
             `;
         }
-    } catch (error) {
-        console.error('加载会话统计失败，详细错误:', error);
-        showMessage('网络错误，请稍后重试', 'error');
-        
-        // 显示网络错误状态
-        document.getElementById('analyticsContent').innerHTML = `
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-wifi fa-3x mb-3 text-danger"></i>
-                <h5>网络错误</h5>
-                <p>请检查网络连接后重试</p>
-            </div>
-        `;
     }
 }
 
-// 显示统计数据
-function displayStatistics(data) {
-    const container = document.getElementById('analyticsContent');
+// 显示会话级别统计概览 - 专为组织者设计
+function displaySessionOverview(data) {
+    const container = document.getElementById('analyticsContent') || document.getElementById('statisticsContent');
     
-    if (!data.quiz_statistics || data.quiz_statistics.length === 0) {
-        container.innerHTML = `
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-chart-bar fa-3x mb-3"></i>
-                <h5>该会话暂无题目统计数据</h5>
-                <p>请确保该会话已经创建了题目并有用户参与答题</p>
-            </div>
-        `;
+    if (!container) {
+        console.error('找不到统计容器元素');
         return;
     }
-
-    // 计算总体统计
-    const totalQuizzes = data.quiz_statistics.length;
-    const totalResponses = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.total_responses, 0);
-    const totalCorrect = data.quiz_statistics.reduce((sum, quiz) => sum + quiz.correct_responses, 0);
-    const overallAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses * 100).toFixed(1) : 0;
-
+    
+    const stats = data.overall_statistics;
+    const sessionInfo = data.session_info;
+    
     let html = `
-        <!-- 总体统计卡片 -->
+        <!-- 会话信息 -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-comments me-2"></i>${sessionInfo.title}
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    创建时间: ${new Date(sessionInfo.created_at).toLocaleString('zh-CN')}
+                                </small>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <span class="badge ${sessionInfo.is_active ? 'bg-success' : 'bg-secondary'} fs-6">
+                                    ${sessionInfo.is_active ? '活跃中' : '已停用'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 核心统计卡片 -->
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="card bg-primary text-white">
                     <div class="card-body text-center">
-                        <i class="fas fa-question-circle fa-2x mb-2"></i>
-                        <h4>${totalQuizzes}</h4>
-                        <p class="mb-0">总题目数</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-info text-white">
-                    <div class="card-body text-center">
                         <i class="fas fa-users fa-2x mb-2"></i>
-                        <h4>${totalResponses}</h4>
-                        <p class="mb-0">总回答数</p>
+                        <h4>${stats.total_participants}</h4>
+                        <p class="mb-0">总参与者</p>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card bg-success text-white">
                     <div class="card-body text-center">
-                        <i class="fas fa-check-circle fa-2x mb-2"></i>
-                        <h4>${totalCorrect}</h4>
-                        <p class="mb-0">正确回答数</p>
+                        <i class="fas fa-user-check fa-2x mb-2"></i>
+                        <h4>${stats.participated_users}</h4>
+                        <p class="mb-0">已答题人数</p>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card bg-warning text-white">
                     <div class="card-body text-center">
+                        <i class="fas fa-user-times fa-2x mb-2"></i>
+                        <h4>${stats.not_participated_users}</h4>
+                        <p class="mb-0">未答题人数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
                         <i class="fas fa-percentage fa-2x mb-2"></i>
-                        <h4>${overallAccuracy}%</h4>
-                        <p class="mb-0">总体正确率</p>
+                        <h4>${stats.participation_rate}%</h4>
+                        <p class="mb-0">参与率</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 题目详细统计 -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>题目详细统计</h5>
+        <!-- 答题情况统计 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-primary">
+                    <div class="card-body text-center">
+                        <i class="fas fa-question-circle fa-2x text-primary mb-2"></i>
+                        <h4 class="text-primary">${stats.total_quizzes}</h4>
+                        <p class="mb-0 text-muted">总题目数</p>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-    `;
+            <div class="col-md-3">
+                <div class="card border-info">
+                    <div class="card-body text-center">
+                        <i class="fas fa-edit fa-2x text-info mb-2"></i>
+                        <h4 class="text-info">${stats.total_answers}</h4>
+                        <p class="mb-0 text-muted">总回答数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-success">
+                    <div class="card-body text-center">
+                        <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                        <h4 class="text-success">${stats.correct_answers}</h4>
+                        <p class="mb-0 text-muted">正确回答数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-warning">
+                    <div class="card-body text-center">
+                        <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                        <h4 class="text-warning">${stats.overall_accuracy}%</h4>
+                        <p class="mb-0 text-muted">整体正确率</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    data.quiz_statistics.forEach((quiz, index) => {
-        const accuracy = quiz.total_responses > 0 ? quiz.accuracy_rate.toFixed(1) : 0;
-        
-        // 格式化创建时间
-        const createdDate = new Date(quiz.created_at);
-        const formattedDate = createdDate.toLocaleString('zh-CN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        // 获取选项内容，处理undefined情况
-        const options = {
-            'A': quiz.option_a || '选项A内容未设置',
-            'B': quiz.option_b || '选项B内容未设置',
-            'C': quiz.option_c || '选项C内容未设置',
-            'D': quiz.option_d || '选项D内容未设置'
-        };
-
-        html += `
-            <div class="quiz-stat-item mb-4 border rounded shadow-sm">
-                <!-- 题目头部 -->
-                <div class="quiz-header bg-light p-3 border-bottom">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="d-flex align-items-center mb-2">
-                                <span class="badge bg-primary me-2">题目 ${index + 1}</span>
-                                <span class="badge bg-info ms-2">ID: ${quiz.id}</span>
+        <!-- 参与度可视化 -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>参与度分布</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>已参与答题</small>
+                                <small>${stats.participated_users}人 (${stats.participation_rate}%)</small>
                             </div>
-                            <h6 class="mb-2 text-dark">${quiz.question}</h6>
-                            <div class="d-flex align-items-center text-muted small">
-                                <i class="fas fa-clock me-1"></i>
-                                <span class="me-3">创建时间: ${formattedDate}</span>
-                                <i class="fas fa-stopwatch me-1"></i>
-                                <span>时间限制: ${quiz.time_limit || 30}秒</span>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-success" style="width: ${stats.participation_rate}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>未参与答题</small>
+                                <small>${stats.not_participated_users}人 (${100 - stats.participation_rate}%)</small>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-warning" style="width: ${100 - stats.participation_rate}%"></div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>答题准确度</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>正确回答</small>
+                                <small>${stats.correct_answers}次 (${stats.overall_accuracy}%)</small>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-success" style="width: ${stats.overall_accuracy}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>错误回答</small>
+                                <small>${stats.total_answers - stats.correct_answers}次 (${100 - stats.overall_accuracy}%)</small>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-danger" style="width: ${100 - stats.overall_accuracy}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 
-                <!-- 题目选项 -->
-                <div class="quiz-options p-3 bg-white">
-                    <h6 class="mb-3"><i class="fas fa-list me-2"></i>题目选项</h6>
-                    <div class="row">
+    // 题目参与情况表格
+    if (data.quiz_participation && data.quiz_participation.length > 0) {
+        html += `
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-list me-2"></i>各题目参与情况</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>题目</th>
+                                            <th>状态</th>
+                                            <th class="text-center">参与人数</th>
+                                            <th class="text-center">参与率</th>
+                                            <th class="text-center">正确人数</th>
+                                            <th class="text-center">正确率</th>
+                                            <th class="text-center">创建时间</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
         `;
 
-        ['A', 'B', 'C', 'D'].forEach(option => {
-            const isCorrect = quiz.correct_answer === option;
-            const count = quiz.option_distribution[option] || 0;
-            const percentage = quiz.total_responses > 0 ? (count / quiz.total_responses * 100).toFixed(1) : 0;
-            const optionText = options[option];
-            const isUndefined = optionText.includes('未设置');
+        data.quiz_participation.forEach(quiz => {
+            const createdTime = quiz.created_at ? new Date(quiz.created_at).toLocaleString('zh-CN') : '未知';
+            
+            // 基于参与率的状态判断
+            let participationStatus = '';
+            let participationBadgeClass = '';
+            if (quiz.participation_rate >= 80) {
+                participationStatus = '高参与';
+                participationBadgeClass = 'bg-success';
+            } else if (quiz.participation_rate >= 50) {
+                participationStatus = '中参与';
+                participationBadgeClass = 'bg-warning';
+            } else {
+                participationStatus = '低参与';
+                participationBadgeClass = 'bg-danger';
+            }
             
             html += `
-                <div class="col-md-6 mb-2">
-                    <div class="option-card p-3 border rounded ${isCorrect ? 'border-success bg-success bg-opacity-10' : 'border-light'} ${isUndefined ? 'border-warning bg-warning bg-opacity-10' : ''}">
-                        <div class="d-flex align-items-start">
-                            <div class="option-label me-3">
-                                <span class="badge ${isCorrect ? 'bg-success' : isUndefined ? 'bg-warning' : 'bg-secondary'} fs-6">
-                                    ${option} ${isCorrect ? '✓' : ''}
-                                </span>
+                <tr>
+                    <td>
+                        <span class="badge bg-primary">题目 ${quiz.quiz_number}</span>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column gap-1">
+                            <span class="badge ${quiz.is_active ? 'bg-success' : 'bg-secondary'}" style="font-size: 0.7em;">
+                                ${quiz.is_active ? '进行中' : '已结束'}
+                            </span>
+                            <span class="badge ${participationBadgeClass}" style="font-size: 0.7em;">
+                                ${participationStatus}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="text-center">${quiz.actual_responses}</td>
+                    <td class="text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="me-2">${quiz.participation_rate.toFixed(1)}%</span>
+                            <div class="progress flex-grow-1" style="height: 8px; width: 60px;">
+                                <div class="progress-bar bg-info" style="width: ${quiz.participation_rate}%"></div>
                             </div>
-                            <div class="flex-grow-1">
-                                <div class="option-text mb-2 ${isUndefined ? 'text-warning fst-italic' : ''}">${optionText}</div>
-                                <div class="option-stats">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <small class="text-muted">${count} 人选择 (${percentage}%)</small>
-                                        <small class="text-muted">${percentage}%</small>
-                                    </div>
-                                    <div class="progress" style="height: 6px;">
-                                        <div class="progress-bar ${isCorrect ? 'bg-success' : 'bg-secondary'}" 
-                                             style="width: ${percentage}%"></div>
-                                    </div>
-                                </div>
+                        </div>
+                    </td>
+                    <td class="text-center">${quiz.correct_responses}</td>
+                    <td class="text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="me-2">${quiz.accuracy_rate.toFixed(1)}%</span>
+                            <div class="progress flex-grow-1" style="height: 8px; width: 60px;">
+                                <div class="progress-bar bg-success" style="width: ${quiz.accuracy_rate}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center"><small class="text-muted">${createdTime}</small></td>
+                </tr>
+            `;
+        });
+
+        html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 最活跃参与者
+    if (data.top_participants && data.top_participants.length > 0) {
+        html += `
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-trophy me-2"></i>最活跃参与者 (前5名)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+        `;
+
+        data.top_participants.forEach((participant, index) => {
+            const badgeClass = index === 0 ? 'bg-warning' : index === 1 ? 'bg-secondary' : index === 2 ? 'bg-dark' : 'bg-primary';
+            const icon = index === 0 ? 'fa-crown' : index === 1 ? 'fa-medal' : index === 2 ? 'fa-award' : 'fa-star';
+            
+            html += `
+                <div class="col-md-4 mb-3">
+                    <div class="card border-0 bg-light">
+                        <div class="card-body text-center">
+                            <i class="fas ${icon} fa-2x text-warning mb-2"></i>
+                            <h6 class="card-title">${participant.username}</h6>
+                            ${participant.nickname ? `<small class="text-muted">${participant.nickname}</small><br>` : ''}
+                            <div class="mt-2">
+                                <span class="badge ${badgeClass} me-1">第${index + 1}名</span>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    答题: ${participant.total_answers}次<br>
+                                    正确: ${participant.correct_answers}次<br>
+                                    准确率: ${participant.accuracy}%
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -970,46 +1168,15 @@ function displayStatistics(data) {
         });
 
         html += `
-                    </div>
-                </div>
-
-                <!-- 统计数据 -->
-                <div class="quiz-stats p-3 bg-light border-top">
-                    <div class="row text-center">
-                        <div class="col-md-3">
-                            <div class="stat-item">
-                                <div class="h5 mb-1 text-primary">${quiz.total_responses}</div>
-                                <small class="text-muted">总回答数</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-item">
-                                <div class="h5 mb-1 text-success">${quiz.correct_responses}</div>
-                                <small class="text-muted">答对人数</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-item">
-                                <div class="h5 mb-1 text-warning">${accuracy}%</div>
-                                <small class="text-muted">正确率</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-item">
-                                <div class="h5 mb-1 text-info">${quiz.correct_answer}</div>
-                                <small class="text-muted">正确答案</small>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-    });
+    }
 
-    html += `
-            </div>
-        </div>
-    `;
+
 
     container.innerHTML = html;
 }
@@ -1300,6 +1467,8 @@ function fallbackCopyTextToClipboard(text) {
     
     document.body.removeChild(textArea);
 }
+
+
 
 // 退出登录
 async function logout() {

@@ -642,8 +642,11 @@
                                     </select>
                                 </div>
                                 <div class="col-md-6 d-flex align-items-end">
-                                    <button class="btn btn-primary" onclick="loadSelectedSessionStats()">
+                                    <button class="btn btn-primary me-2" onclick="loadSelectedSessionStats()">
                                         <i class="fas fa-chart-line me-2"></i>查看统计
+                                    </button>
+                                    <button class="btn btn-outline-primary" onclick="refreshCurrentSessionStats()" id="refreshStatsBtn" style="display: none;">
+                                        <i class="fas fa-sync-alt me-2"></i>刷新数据
                                     </button>
                                 </div>
                             </div>

@@ -1162,13 +1162,25 @@ async function refreshDiscussions() {
     }
     
     try {
+        // 确保 currentSessionId 是数字类型
+        const sessionId = parseInt(currentSessionId);
+        if (isNaN(sessionId)) {
+            console.error('Invalid session ID:', currentSessionId);
+            showMessage('会话ID无效', 'error');
+            return;
+        }
+        
+        console.log('Loading discussions for session:', sessionId);
+        const url = `/api/quiz/session/${sessionId}/discussions`;
+        console.log('Request URL:', url);
+        
         // 获取会话中的所有题目
-        const response = await fetch(`/api/quiz/session/${currentSessionId}/discussions`);
+        const response = await fetch(url);
         if (response.ok) {
             const data = await response.json();
             displayDiscussionsList(data);
         } else {
-            console.error('获取讨论列表失败:', response.status);
+            console.error('获取讨论列表失败:', response.status, response.statusText);
             if (response.status === 401) {
                 document.getElementById('discussionsContent').innerHTML = `
                     <div class="text-center">
@@ -1246,6 +1258,14 @@ async function showQuizDiscussion(quizId) {
     const detailContainer = document.getElementById('quizDiscussionDetail');
     
     try {
+        // 确保 quizId 是数字类型
+        const id = parseInt(quizId);
+        if (isNaN(id)) {
+            console.error('Invalid quiz ID:', quizId);
+            showMessage('题目ID无效', 'error');
+            return;
+        }
+        
         detailContainer.style.display = 'block';
         detailContainer.innerHTML = `
             <div class="text-center p-4">
@@ -1256,7 +1276,11 @@ async function showQuizDiscussion(quizId) {
             </div>
         `;
         
-        const response = await fetch(`/api/quiz/${quizId}/discussions`);
+        console.log('Loading discussion for quiz:', id);
+        const url = `/api/quiz/${id}/discussions`;
+        console.log('Request URL:', url);
+        
+        const response = await fetch(url);
         if (response.ok) {
             const data = await response.json();
             displayQuizDiscussion(data);
@@ -1264,6 +1288,7 @@ async function showQuizDiscussion(quizId) {
             // 滚动到讨论详情区域
             detailContainer.scrollIntoView({ behavior: 'smooth' });
         } else {
+            console.error('HTTP Error:', response.status, response.statusText);
             throw new Error(`HTTP ${response.status}`);
         }
     } catch (error) {
@@ -1347,14 +1372,21 @@ function displayQuizDiscussion(data) {
                         <div class="row">
                             <div class="col-md-6">
                                 <p class="mb-1">总回答数: ${stats.total_responses}</p>
+                                ${stats.actual_responses !== undefined ? `<p class="mb-1">实际答题: ${stats.actual_responses}</p>` : ''}
+                                ${stats.unanswered_count !== undefined ? `<p class="mb-1">未答题: ${stats.unanswered_count}</p>` : ''}
                             </div>
                             <div class="col-md-6">
                                 <p class="mb-1">选项分布:</p>
-                                ${Object.entries(stats.option_distribution || {}).map(([option, count]) => `
-                                    <small class="d-block">
-                                        ${option}: ${count}人 (${((count/stats.total_responses)*100).toFixed(1)}%)
-                                    </small>
-                                `).join('')}
+                                ${Object.entries(stats.option_distribution || {}).map(([option, count]) => {
+                                    // 使用实际答题数作为基数，如果没有则使用总数
+                                    const baseCount = stats.actual_responses || stats.total_responses;
+                                    const percentage = baseCount > 0 ? ((count/baseCount)*100).toFixed(1) : '0.0';
+                                    return `
+                                        <small class="d-block">
+                                            ${option}: ${count}人 (${percentage}%)
+                                        </small>
+                                    `;
+                                }).join('')}
                             </div>
                         </div>
                     </div>

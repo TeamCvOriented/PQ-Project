@@ -377,32 +377,77 @@
         }
 
         /* 功能访问区域美化 */
-        #postQuizActions .card {
-            background: var(--success-gradient);
-            color: white;
-            border: none;
-            border-radius: var(--border-radius);
-            box-shadow: var(--card-shadow);
-        }
-
-        #postQuizActions .card-header {
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            border-radius: var(--border-radius) var(--border-radius) 0 0;
-        }
-
-        #postQuizActions .btn {
+        .feature-card {
             background: white;
-            color: #333;
-            border: none;
-            border-radius: var(--border-radius);
-            font-weight: 500;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 123, 255, 0.1), transparent);
             transition: var(--transition);
         }
 
-        #postQuizActions .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        .feature-card:hover::before {
+            left: 100%;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+            border-color: #007bff;
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.1);
+            box-shadow: 0 8px 20px rgba(0, 123, 255, 0.4);
+        }
+
+        .feature-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .feature-description {
+            line-height: 1.5;
+        }
+
+        .feature-action .btn {
+            transition: var(--transition);
+        }
+
+        .feature-card:hover .feature-action .btn {
+            transform: scale(1.05);
+        }
+
+        .bg-gradient-success {
+            background: linear-gradient(135deg, #28a745, #20c997) !important;
+        }
+
+        .completion-info {
+            border-left: 4px solid #007bff;
         }
 
         /* 响应式设计 */
@@ -1665,27 +1710,61 @@
                             
                             <!-- 答题完成后的功能访问区域 -->
                             <div id="postQuizActions" class="mt-4" style="display: none;">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h5><i class="fas fa-check-circle me-2"></i>答题完成后可用功能</h5>
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-header bg-gradient-success text-white border-0">
+                                        <h5 class="mb-0 d-flex align-items-center">
+                                            <i class="fas fa-check-circle me-2"></i>
+                                            <span>恭喜完成答题！</span>
+                                            <i class="fas fa-trophy ms-auto text-warning"></i>
+                                        </h5>
                                     </div>
-                                    <div class="card-body">
-                                        <div class="row">
-                                            <div class="col-md-6 mb-3">
-                                                <button class="btn btn-primary w-100" onclick="showSection('results')">
-                                                    <i class="fas fa-chart-line me-2"></i>查看答题结果
-                                                </button>
+                                    <div class="card-body p-4">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <div class="feature-card h-100" onclick="showSection('results')" style="cursor: pointer;">
+                                                    <div class="feature-card-body text-center p-4">
+                                                        <div class="feature-icon mb-3">
+                                                            <i class="fas fa-chart-line"></i>
+                                                        </div>
+                                                        <h6 class="feature-title mb-2">查看答题结果</h6>
+                                                        <p class="feature-description text-muted small mb-3">
+                                                            查看您的答题情况、正确率统计和详细分析
+                                                        </p>
+                                                        <div class="feature-action">
+                                                            <span class="btn btn-outline-primary btn-sm">
+                                                                立即查看 <i class="fas fa-arrow-right ms-1"></i>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="col-md-6 mb-3">
-                                                <button class="btn btn-info w-100" onclick="showSection('discussions')">
-                                                    <i class="fas fa-comments me-2"></i>参与讨论
-                                                </button>
+                                            <div class="col-md-6">
+                                                <div class="feature-card h-100" onclick="showSection('discussions')" style="cursor: pointer;">
+                                                    <div class="feature-card-body text-center p-4">
+                                                        <div class="feature-icon mb-3">
+                                                            <i class="fas fa-comments"></i>
+                                                        </div>
+                                                        <h6 class="feature-title mb-2">参与讨论</h6>
+                                                        <p class="feature-description text-muted small mb-3">
+                                                            与其他参与者交流想法，分享答题心得
+                                                        </p>
+                                                        <div class="feature-action">
+                                                            <span class="btn btn-outline-info btn-sm">
+                                                                开始讨论 <i class="fas fa-arrow-right ms-1"></i>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                        <small class="text-muted">
-                                            <i class="fas fa-info-circle me-1"></i>
-                                            这些功能只有在您完成答题后才能使用
-                                        </small>
+                                        <div class="completion-info mt-4 p-3 bg-light rounded">
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-info-circle text-primary me-2"></i>
+                                                <small class="text-muted">
+                                                    您已成功完成本次答题活动，现在可以查看结果和参与讨论了
+                                                </small>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
