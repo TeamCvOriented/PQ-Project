@@ -151,7 +151,7 @@ static/
    - 适合需要自定义配置的用户
    - 完全控制安装过程
 
-## � 测试账户
+##  测试账户
 
 系统初始化时会自动创建以下测试账户，您可以用它们来体验不同角色的功能：
 
@@ -282,7 +282,7 @@ static/
 - 解释功能的用途和价值
 - 考虑实现的可行性
 
-## � 致谢
+##  致谢
 
 感谢所有为 PopQuiz 项目做出贡献的开发者和用户！
 
@@ -298,7 +298,7 @@ static/
 - **功能建议**: [GitHub Discussions](https://github.com/TeamCvOriented/PQ-Project/discussions)
 - **详细部署指南**: [SETUP.md](SETUP.md)
 
-## �📄 开源协议
+## 📄 开源协议
 
 本项目采用 [MIT License](LICENSE) 开源协议。
 
