@@ -122,16 +122,17 @@ cd popquiz
 # 下载项目文件到此目录
 ```
 
-#### 2. 创建虚拟环境
+#### 2. 创建并激活虚拟环境
 ```bash
 # Windows
-python -m venv venv
-venv\Scripts\activate
+conda create -n env_name
+conda activate env_name
 
-# macOS/Linux  
-python3 -m venv venv
-source venv/bin/activate
+# Linux/macOS
+conda create -n env_name
+source activate env_name
 ```
+
 
 #### 3. 安装依赖包
 ```bash
