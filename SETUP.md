@@ -3,8 +3,7 @@
 ## 📋 目录
 - [项目简介](#项目简介)
 - [系统要求](#系统要求)
-- [方式一：一键启动（推荐）](#方式一一键启动推荐)
-- [方式二：手动启动](#方式二手动启动)
+- [部署启动](#部署启动)
 - [环境变量配置](#环境变量配置)
 - [测试账户](#测试账户)
 - [功能介绍](#功能介绍)
@@ -40,73 +39,7 @@ PopQuiz 是一个智能互动问答系统，支持：
 
 ---
 
-## 🎯 方式一：一键启动（推荐）
-
-### Windows 用户
-
-#### 步骤 1：检查 Python 环境
-1. 按 `Win + R` 键，输入 `cmd`，按回车键
-2. 在命令行中输入：`python --version`
-3. 如果显示 Python 3.8+ 版本号，则已准备就绪
-4. 如果提示 "不是内部或外部命令"，请先安装 Python
-
-#### 步骤 2：安装 Python（如果未安装）
-1. 访问 [Python官网](https://www.python.org/downloads/)
-2. 下载 Python 3.9 或 3.10 版本
-3. **重要**：安装时勾选 "Add Python to PATH"
-4. 完成安装后重启命令行，再次验证版本
-
-#### 步骤 3：一键启动
-1. 下载并解压 PopQuiz 项目到任意目录
-2. **双击运行** `start.bat` 文件
-3. 等待自动安装配置（首次运行需要几分钟）
-4. 看到启动成功信息后，浏览器会自动打开
-5. 如果浏览器未自动打开，手动访问：`http://localhost:5000`
-
-```batch
-# start.bat 会自动执行以下操作：
-# ✅ 检查 Python 环境
-# ✅ 创建虚拟环境
-# ✅ 安装所有依赖包
-# ✅ 初始化数据库
-# ✅ 创建测试账户
-# ✅ 启动应用服务
-# ✅ 自动打开浏览器
-```
-
-### macOS/Linux 用户
-
-```bash
-# 1. 确保已安装 Python 3.8+
-python3 --version
-
-# 2. 克隆或下载项目
-cd /path/to/popquiz
-
-# 3. 创建虚拟环境
-python3 -m venv venv
-
-# 4. 激活虚拟环境
-source venv/bin/activate
-
-# 5. 安装依赖
-pip install -r requirements.txt
-
-# 6. 初始化数据库
-python init_db.py
-
-# 7. 启动应用
-python run.py
-```
-
----
-
-## 🔧 方式二：手动启动
-
-### 适用场景
-- 需要自定义配置
-- 开发调试
-- 一键启动失败时的备用方案
+## 🔧 部署启动
 
 ### 详细步骤
 
@@ -290,15 +223,8 @@ MAX_CONTENT_LENGTH=16MB   # 最大文件大小
 
 ## ❓ 常见问题
 
-### Q1: start.bat 运行失败怎么办？
-**A1:** 按以下步骤排查：
-1. 确认 Python 3.8+ 已安装并加到 PATH
-2. 以管理员身份运行 start.bat
-3. 检查网络连接是否正常
-4. 查看 install.log 文件的错误信息
-
-### Q2: 端口 5000 被占用怎么办？
-**A2:** 两种解决方案：
+### Q1: 端口 5000 被占用怎么办？
+**A1:** 两种解决方案：
 ```bash
 # 方案1：找到并关闭占用进程
 netstat -ano | findstr :5000
@@ -308,15 +234,15 @@ taskkill /PID <进程ID> /F
 # 编辑 run.py 文件，将 port=5000 改为其他端口
 ```
 
-### Q3: AI 功能不工作？
-**A3:** 检查以下配置：
+### Q2: AI 功能不工作？
+**A2:** 检查以下配置：
 1. `.env` 文件中的 `QWEN_API_KEY` 是否正确
 2. 网络是否能访问 API 服务
 3. API 密钥是否有足够余额
 4. 查看应用日志的错误信息
 
-### Q4: 依赖包安装失败？
-**A4:** 尝试以下方案：
+### Q3: 依赖包安装失败？
+**A3:** 尝试以下方案：
 ```bash
 # 升级 pip
 python -m pip install --upgrade pip
@@ -328,8 +254,8 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install flask flask-sqlalchemy flask-cors
 ```
 
-### Q5: 数据库文件丢失？
-**A5:** 重新初始化：
+### Q4: 数据库文件丢失？
+**A4:** 重新初始化：
 ```bash
 # 删除旧数据库
 rm instance/pq_database.db    # Linux/macOS
@@ -339,15 +265,15 @@ del instance\pq_database.db   # Windows
 python init_db.py
 ```
 
-### Q6: 文件上传失败？
-**A6:** 检查以下项目：
+### Q5: 文件上传失败？
+**A5:** 检查以下项目：
 1. 文件大小是否超过限制（默认16MB）
 2. 文件格式是否支持
 3. 上传目录权限是否正确
 4. 磁盘空间是否充足
 
-### Q7: 虚拟环境激活失败？
-**A7:** 根据系统选择命令：
+### Q6: 虚拟环境激活失败？
+**A6:** 根据系统选择命令：
 ```bash
 # Windows
 venv\Scripts\activate
