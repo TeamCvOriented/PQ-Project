@@ -24,7 +24,7 @@ PopQuiz 是一个创新的AI驱动互动问答系统，旨在通过智能生成�
 - **组织者 (Organizer)**：
   - 创建和管理活动会话
   - 查看详细统计分析
-  - 管理用户权限
+  - 收集听众反馈
   
 - **演讲者 (Speaker)**：
   - 主持互动活动
@@ -151,10 +151,6 @@ static/
    - 适合需要自定义配置的用户
    - 完全控制安装过程
 
-3. **🐳 Docker部署** (即将推出)
-   - 容器化部署，环境隔离
-   - 适合生产环境使用
-
 ## � 测试账户
 
 系统初始化时会自动创建以下测试账户，您可以用它们来体验不同角色的功能：
@@ -208,7 +204,7 @@ static/
 2. 在 `.env` 文件中配置 `QWEN_API_KEY`
 3. 重启应用即可使用AI功能
 
-**注意**: 不配置API密钥时，系统会使用内置的模拟数据生成器，同样可以体验完整功能。
+**注意**: 不配置API密钥时，系统会使用内置的模拟数据生成器，同样可以体验完整功能(为保证项目验收效果体验，已暂时使用我们的API密钥)。
 
 ### 数据库配置
 - **开发环境**: 默认使用SQLite数据库，无需额外配置
@@ -258,7 +254,7 @@ static/
 ### 🛠️ 如何参与
 
 1. **Fork 项目**: 点击 GitHub 页面右上角的 Fork 按钮
-2. **克隆仓库**: `git clone https://github.com/your-username/PopQuiz.git`
+2. **克隆仓库**: `git clone https://github.com/TeamCvOriented/PQ-Project.git`
 3. **创建分支**: `git checkout -b feature/your-feature-name`
 4. **提交更改**: `git commit -am 'Add some feature'`
 5. **推送分支**: `git push origin feature/your-feature-name`
